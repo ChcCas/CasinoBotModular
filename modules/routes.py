@@ -9,7 +9,6 @@ def register_routes(app, application):
         if request.headers.get("content-type") == "application/json":
             data = request.get_json(force=True)
             update = Update.de_json(data, application.bot)
-            # ініціалізація відбувається ТУТ перед обробкою
             asyncio.run(application.initialize())
             asyncio.run(application.process_update(update))
             return "ok"
