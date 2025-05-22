@@ -14,10 +14,14 @@ def register_routes(app, application):
         else:
             abort(403)
 
- @app.route("/set-webhook", methods=["GET"])
-def set_webhook():
-    asyncio.run(application.bot.set_webhook(
-        url=WEBHOOK_URL,
-        drop_pending_updates=True
-    ))
-    return "✅ Webhook встановлено!"
+    @app.route("/set-webhook", methods=["GET"])
+    def set_webhook():
+        asyncio.run(application.bot.set_webhook(
+            url=WEBHOOK_URL,
+            drop_pending_updates=True
+        ))
+        return "✅ Webhook встановлено!"
+
+    @app.route("/")
+    def index():
+        return "Bot is alive!"
