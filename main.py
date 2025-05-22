@@ -7,6 +7,15 @@ from modules.handlers import setup_handlers
 
 # === Flask app ===
 app = Flask(__name__)
+application = (
+    ApplicationBuilder()
+    .token(TOKEN)
+    .concurrent_updates(True)
+    .build()
+)
+
+import asyncio
+asyncio.run(application.initialize())  # <- додати цю строку
 
 # === Telegram app ===
 application = (
