@@ -9,6 +9,8 @@ def register_routes(app, application):
         if request.headers.get("content-type") == "application/json":
             data = request.get_json(force=True)
             update = Update.de_json(data, application.bot)
+            # ініціалізація відбувається ТУТ перед обробкою
+            asyncio.run(application.initialize())
             asyncio.run(application.process_update(update))
             return "ok"
         else:
@@ -16,6 +18,7 @@ def register_routes(app, application):
 
     @app.route("/set-webhook", methods=["GET"])
     def set_webhook():
+        asyncio.run(application.initialize())
         asyncio.run(application.bot.set_webhook(
             url=WEBHOOK_URL,
             drop_pending_updates=True
