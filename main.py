@@ -1,3 +1,4 @@
+import os
 from flask import Flask
 from telegram.ext import ApplicationBuilder
 from modules.config import TOKEN
