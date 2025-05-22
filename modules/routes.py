@@ -9,7 +9,7 @@ def register_routes(app, application):
         if request.headers.get("content-type") == "application/json":
             data = request.get_json(force=True)
             update = Update.de_json(data, application.bot)
-            asyncio.get_event_loop().create_task(application.process_update(update))
+asyncio.run(application.process_update(update))
             return "ok"
         else:
             abort(403)
