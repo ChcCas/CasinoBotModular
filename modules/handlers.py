@@ -58,7 +58,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.callback_query:
         await update.callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     return STEP_MENU
-    async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
@@ -140,86 +141,4 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await start(update, context)
 
     await query.message.reply_text("Ця функція ще в розробці.", reply_markup=nav_buttons())
-    return STEP_MENU
-    async def process_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    card = update.message.text.strip()
-    if not re.fullmatch(r"\d{4,5}", card):
-        await update.message.reply_text("Невірний формат. Введіть коректний номер картки.", reply_markup=nav_buttons())
-        return STEP_CLIENT_CARD
-
-    context.user_data["card"] = card
-
-    keyboard = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS]
-    keyboard.append([
-        InlineKeyboardButton("◀️ Назад", callback_data="back"),
-        InlineKeyboardButton("🏠 Головне меню", callback_data="home")
-    ])
-    await update.message.reply_text("Оберіть провайдера:", reply_markup=InlineKeyboardMarkup(keyboard))
-    return STEP_PROVIDER
-
-async def process_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    data = update.callback_query.data
-    if data in ("back", "home"):
-        return await menu_handler(update, context)
-
-    context.user_data["provider"] = data
-    keyboard = [[InlineKeyboardButton(p, callback_data=p)] for p in PAYMENTS]
-    keyboard.append([
-        InlineKeyboardButton("◀️ Назад", callback_data="back"),
-        InlineKeyboardButton("🏠 Головне меню", callback_data="home")
-    ])
-    await update.callback_query.message.reply_text("Оберіть метод оплати:", reply_markup=InlineKeyboardMarkup(keyboard))
-    return STEP_PAYMENT
-
-async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    data = update.callback_query.data
-    if data in ("back", "home"):
-        return await menu_handler(update, context)
-
-    context.user_data["payment"] = data
-    await update.callback_query.message.reply_text(
-        "Завантажте файл підтвердження (фото/документ/відео):",
-        reply_markup=nav_buttons()
-    )
-    return STEP_CONFIRM_FILE
-
-async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["file"] = update.message
-    keyboard = [
-        [InlineKeyboardButton("✅ Надіслати", callback_data="confirm")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="back"),
-         InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
-    ]
-    await update.message.reply_text("Натисніть для підтвердження надсилання:", reply_markup=InlineKeyboardMarkup(keyboard))
-    return STEP_CONFIRMATION
-
-async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    user = update.callback_query.from_user
-    card = context.user_data.get("card")
-    provider = context.user_data.get("provider")
-    payment = context.user_data.get("payment")
-    file_msg: Message = context.user_data.get("file")
-
-    text = f"Заявка від клієнта:\nКартка: {card}\nПровайдер: {provider}\nМетод оплати: {payment}"
-    await file_msg.copy_to(chat_id=ADMIN_ID, caption=text)
-
-    with sqlite3.connect(DB_NAME) as conn:
-        cur = conn.cursor()
-        cur.execute("""CREATE TABLE IF NOT EXISTS deposits (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            username TEXT,
-            card TEXT,
-            provider TEXT,
-            payment TEXT,
-            file_type TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )""")
-        cur.execute("""INSERT INTO deposits (user_id, username, card, provider, payment, file_type)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    (user.id, user.username or '', card, provider, payment, file_msg.effective_attachment.__class__.__name__))
-        conn.commit()
-
-    await update.callback_query.message.reply_text("Дякуємо! Вашу заявку надіслано.", reply_markup=nav_buttons())
     return STEP_MENU
