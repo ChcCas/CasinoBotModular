@@ -21,6 +21,3 @@ def set_webhook():
         drop_pending_updates=True
     ))
     return "✅ Webhook встановлено!"
-    @app.route("/")
-    def index():
-        return "Bot is alive!"
