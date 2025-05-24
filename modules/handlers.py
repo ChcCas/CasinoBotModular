@@ -25,21 +25,22 @@ PROVIDERS = ["🏆 CHAMPION", "🎰 SUPEROMATIC"]
 PAYMENTS = ["Карта", "Криптопереказ"]
 
 def setup_handlers(application):
-    # Основний ConversationHandler
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            STEP_MENU: [ CallbackQueryHandler(menu_handler) ],
+            # Головне меню
+            STEP_MENU: [CallbackQueryHandler(menu_handler)],
 
             # Флоу “Я Клієнт”
             STEP_CLIENT_CARD: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, process_card),
                 CallbackQueryHandler(menu_handler, pattern="^(back|home)$")
             ],
-            STEP_PROVIDER:  [ CallbackQueryHandler(process_provider) ],
-            STEP_PAYMENT:   [ CallbackQueryHandler(process_payment) ],
-            STEP_CONFIRM_FILE: [ MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO, process_file) ],
-            STEP_CONFIRMATION: [ CallbackQueryHandler(confirm_submission) ],
+            STEP_PROVIDER:  [CallbackQueryHandler(process_provider)],
+            STEP_PAYMENT:   [CallbackQueryHandler(process_payment)],
+            STEP_CRYPTO_TYPE: [CallbackQueryHandler(process_crypto_choice)],
+            STEP_CONFIRM_FILE: [MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO, process_file)],
+            STEP_CONFIRMATION: [CallbackQueryHandler(confirm_submission)],
 
             # Флоу “Реєстрація”
             STEP_REG_NAME: [
@@ -55,12 +56,11 @@ def setup_handlers(application):
                 CallbackQueryHandler(menu_handler, pattern="^(back|home)$")
             ],
         },
-        fallbacks=[ CommandHandler("start", start) ],
+        fallbacks=[CommandHandler("start", start)],
     )
     application.add_handler(conv)
 
-    # ——— Хендлер відповіді адміна ——————————————————————
-    # ловимо будь-який текстовий reply від ADMIN_ID і шлемо його кінцевому користувачу
+    # Хендлер для reply від адміністратора
     application.add_handler(
         MessageHandler(
             filters.TEXT & filters.User(ADMIN_ID) & filters.REPLY,
@@ -87,7 +87,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("ℹ️ Допомога", callback_data="help")],
     ]
     if update.effective_user.id == ADMIN_ID:
-        keyboard.append([ InlineKeyboardButton("🛠 Адмін-панель", callback_data="admin_panel") ])
+        keyboard.append([InlineKeyboardButton("🛠 Адмін-панель", callback_data="admin_panel")])
     text = "BIG BAME MONEY"
     if update.message:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
@@ -96,7 +96,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_MENU
 
 
-# ——— Обробка головного меню ————————————————————
+# ——— Головне меню ——————————————————————————————
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -193,16 +193,16 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("Введіть ім’я або нікнейм:", reply_markup=nav_buttons())
         return STEP_REG_NAME
 
-    # Навігація назад / головне меню
+    # Назад / Головне меню
     if data in ("back", "home"):
         return await start(update, context)
 
-    # Інші — ще в розробці
+    # В інше — ще в розробці
     await query.message.reply_text("Ця функція ще в розробці.", reply_markup=nav_buttons())
     return STEP_MENU
 
 
-# ——— Флоу “ Клієнт” ——————————————————————
+# ——— Флоу “Я Клієнт” ——————————————————————
 async def process_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     card = update.message.text.strip()
     if not re.fullmatch(r"\d{4,5}", card):
@@ -215,8 +215,10 @@ async def process_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Оберіть провайдера:", reply_markup=InlineKeyboardMarkup(kb))
     return STEP_PROVIDER
 
+
 async def process_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query; await query.answer()
+    query = update.callback_query
+    await query.answer()
     if query.data in ("back", "home"):
         return await menu_handler(update, context)
 
@@ -226,19 +228,19 @@ async def process_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.reply_text("Оберіть метод оплати:", reply_markup=InlineKeyboardMarkup(kb))
     return STEP_PAYMENT
 
+
 async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
 
-    # Обробка ◀️ Назад / 🏠 Головне меню
+    # Назад / Головне меню
     if data in ("back", "home"):
         return await menu_handler(update, context)
 
     context.user_data["payment"] = data
 
     if data == "Карта":
-        # Нова інструкція для карткового переказу
         text = (
             "Будь ласка, зробіть переказ на карту:\n\n"
             "Тарасюк Віталій\n"
@@ -250,26 +252,74 @@ async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "– відео"
         )
         await query.message.reply_text(text, reply_markup=nav_buttons())
-    else:
-        # Криптопереказ залишаємо стандарт
-       
+        return STEP_CONFIRM_FILE
+
+    # Криптопереказ — переходимо в наступний стан для вибору метода
+    if data == "Криптопереказ":
+        crypto_kb = [
+            [InlineKeyboardButton("Trustee Plus", callback_data="Trustee Plus")],
+            [InlineKeyboardButton("Telegram Wallet", callback_data="Telegram Wallet")],
+            [InlineKeyboardButton("Coinbase Wallet", callback_data="Coinbase Wallet")],
+            [InlineKeyboardButton("◀️ Назад", callback_data="back"),
+             InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
+        ]
+        await query.message.reply_text(
+            "Оберіть метод криптопереказу:",
+            reply_markup=InlineKeyboardMarkup(crypto_kb)
+        )
+        return STEP_CRYPTO_TYPE
+
+    # Інші випадки (не повинно трапитися)
+    await query.message.reply_text("Невідомий метод оплати.", reply_markup=nav_buttons())
+    return STEP_MENU
+
+
+async def process_crypto_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    choice = query.data
+
+    if choice == "Trustee Plus":
+        context.user_data["crypto_method"] = choice
+        text = (
+            "Зробіть переказ у USDT на:\n\n"
+            "ID: bgm001\n"
+            "Примітка: приймаємо тільки USDT\n\n"
+            "Після переказу надішліть підтвердження (фото/документ/відео)."
+        )
+        await query.message.reply_text(text, reply_markup=nav_buttons())
+        return STEP_CONFIRM_FILE
+
+    # Telegram Wallet та Coinbase Wallet ще в розробці
+    if choice in ("Telegram Wallet", "Coinbase Wallet"):
+        await query.message.reply_text(
+            f"Метод «{choice}» наразі в розробці. Оберіть інший спосіб.",
+            reply_markup=nav_buttons()
+        )
+        return STEP_MENU
+
+
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["file"] = update.message
     kb = [
         [InlineKeyboardButton("✅ Надіслати", callback_data="confirm")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
+        [InlineKeyboardButton("◀️ Назад", callback_data="back"),
+         InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
     ]
     await update.message.reply_text("Натисніть для підтвердження надсилання:", reply_markup=InlineKeyboardMarkup(kb))
     return STEP_CONFIRMATION
 
-async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query; await query.answer()
-    user     = update.effective_user
-    card     = context.user_data["card"]
-    provider = context.user_data["provider"]
-    payment  = context.user_data["payment"]
-    file_msg: Message = context.user_data["file"]
 
+async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user     = update.effective_user
+    card     = context.user_data.get("card")
+    provider = context.user_data.get("provider")
+    payment  = context.user_data.get("payment")
+    file_msg: Message = context.user_data.get("file")
+
+    # Caption залежить від способу оплати
     caption = (
         f"Заявка від клієнта:\n"
         f"Картка: {card}\n"
@@ -316,7 +366,7 @@ async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE)
         conn.execute(
             "INSERT INTO deposits(user_id, username, card, provider, payment, file_type) VALUES (?, ?, ?, ?, ?, ?)",
             (user.id, user.username or "", card, provider, payment,
-            file_msg.effective_attachment.__class__.__name__)
+             file_msg.effective_attachment.__class__.__name__)
         )
         conn.commit()
 
