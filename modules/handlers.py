@@ -1,4 +1,5 @@
 import re
+import html
 import sqlite3
 from datetime import datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, Message
@@ -158,7 +159,7 @@ async def back_to_confirm_file(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def back_to_withdraw_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
-    await update.callback_query.message.edit_text("Введіть суму виводу (мінімум 200):", reply_markup=nav_buttons())
+    await update.callback_query.message.edit_text("Введіть суму виведення (мінімум 200):", reply_markup=nav_buttons())
     return STEP_WITHDRAW_AMOUNT
 
 async def back_to_withdraw_dest(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -352,7 +353,7 @@ async def help_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_create(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     context.user_data["help_category"] = query.data
-    await query.message.edit_text(f"✍️ Введіть текст звернення для «{query.data}»:", reply_markup=nav_buttons())
+    await query.message.edit_text(f"✍️ Введіть текст зверення для «{query.data}»:", reply_markup=nav_buttons())
     return STEP_HELP_TEXT
 
 async def help_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -378,10 +379,10 @@ async def help_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id="@bgmua",
         text=(
             f"🆘 *Нове звернення*\n"
-            f"👤 Користувач: {user.full_name} (@{user.username or user.id})\n"
-            f"📂 Категорія: {cat}\n"
+            f"👤 Користувач: {html.escape(user.full_name)} (@{html.escape(user.username or str(user.id))})\n"
+            f"📂 Категорія: {html.escape(cat)}\n"
             f"⏰ {timestamp}\n\n"
-            f"{txt}"
+            f"{html.escape(txt)}"
         ),
         parse_mode="Markdown"
     )
@@ -493,16 +494,29 @@ async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE)
     payment  = context.user_data.get("payment", "—")
     file_msg: Message = context.user_data.get("file")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    safe_name     = html.escape(user.full_name)
+    safe_username = html.escape(user.username or str(user.id))
+    safe_card     = html.escape(card)
+    safe_provider = html.escape(provider)
+    safe_payment  = html.escape(payment)
+
     caption = (
-        f"🆕 *Нова заявка на поповнення*\n\n"
-        f"👤 Користувач: {user.full_name} (@{user.username or user.id}) [ID {user.id}]\n"
-        f"🏷 Картка: {card}\n"
-        f"🏭 Провайдер: {provider}\n"
-        f"💳 Метод: {payment}\n"
+        f"🆕 <b>Нова заявка на поповнення</b>\n\n"
+        f"👤 Користувач: {safe_name} (@{safe_username}) [ID {user.id}]\n"
+        f"🏷 Картка: <code>{safe_card}</code>\n"
+        f"🏭 Провайдер: {safe_provider}\n"
+        f"💳 Метод: {safe_payment}\n"
         f"📂 Тип файлу: {file_msg.effective_attachment.__class__.__name__}\n"
         f"⏰ {timestamp}"
     )
-    admin_msg = await file_msg.copy(chat_id=ADMIN_ID, caption=caption, parse_mode="Markdown")
+
+    admin_msg = await file_msg.copy(
+        chat_id=ADMIN_ID,
+        caption=caption,
+        parse_mode="HTML"
+    )
+
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO threads(admin_msg_id,user_id,user_msg_id,provider) VALUES (?,?,?,?)",
@@ -516,6 +530,7 @@ async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
         )
         conn.commit()
+
     await query.message.edit_text("✅ Ваша заявка на поповнення надіслана.", reply_markup=nav_buttons())
     return STEP_MENU
 
@@ -563,22 +578,26 @@ async def withdraw_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     dest   = context.user_data["withdraw_dest"]
     method = context.user_data["withdraw_method"]
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute(
-            "INSERT INTO withdrawals(user_id,username,amount,method,details,source_code) VALUES (?,?,?,?,?,?)",
-            (user.id, user.username or "", amount, method, dest, code)
-        )
-        conn.commit()
+
+    safe_name     = html.escape(user.full_name)
+    safe_username = html.escape(user.username or str(user.id))
+    safe_code     = html.escape(code)
+    safe_amount   = html.escape(amount)
+    safe_dest     = html.escape(dest)
+    safe_method   = html.escape(method)
+
     text = (
-        f"🆕 *Нова заявка на виведення*\n\n"
-        f"👤 Користувач: {user.full_name} (@{user.username or user.id}) [ID {user.id}]\n"
-        f"🔢 Код: {code}\n"
-        f"💰 Сума: {amount}\n"
-        f"🏷 Метод: {method}\n"
-        f"📥 Реквізити: {dest}\n"
+        f"🆕 <b>Нова заявка на виведення</b>\n\n"
+        f"👤 Користувач: {safe_name} (@{safe_username}) [ID {user.id}]\n"
+        f"🔢 Код: <code>{safe_code}</code>\n"
+        f"💰 Сума: {safe_amount}\n"
+        f"🏷 Метод: {safe_method}\n"
+        f"📥 Реквізити: <code>{safe_dest}</code>\n"
         f"⏰ {timestamp}"
     )
-    await context.bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="Markdown")
+
+    await context.bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="HTML")
+
     kb = [[InlineKeyboardButton("Підтверджую отримання", callback_data="ack_withdraw")]]
     await query.message.edit_text("✅ Заявку на виведення відправлено.", reply_markup=InlineKeyboardMarkup(kb))
     return STEP_WITHDRAW_ACK
@@ -590,7 +609,7 @@ async def withdraw_ack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=ADMIN_ID,
         text=f"✔️ @{user.username or user.id} підтвердив отримання коштів."
     )
-    await query.message.edit_text("✅ Дякуємо за підтвердження!", reply_markup=nav_buttons())
+    await query.message.edit_text("✅ Дякую за підтвердження!", reply_markup=nav_buttons())
     return STEP_MENU
 
 # ——— Флоу “Реєстрація” ——————————————————————————————————
@@ -608,18 +627,17 @@ async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data["reg_name"]
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("INSERT INTO registrations(user_id,name,phone) VALUES (?,?,?)",
-                     (update.effective_user.id, name, phone))
+        conn.execute("INSERT INTO registrations(user_id,name,phone) VALUES (?,?,?)", (update.effective_user.id, name, phone))
         conn.commit()
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=(
-            f"🆕 *Нова реєстрація*\n\n"
-            f"👤 {name} (@{update.effective_user.username or update.effective_user.id})\n"
-            f"📞 {phone}\n"
+            f"🆕 <b>Нова реєстрація</b>\n\n"
+            f"👤 {html.escape(name)} (@{html.escape(update.effective_user.username or str(update.effective_user.id))}) [ID {update.effective_user.id}]\n"
+            f"📞 {html.escape(phone)}\n"
             f"⏰ {timestamp}"
         ),
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     await update.message.reply_text("✅ Реєстрацію розпочато. Введіть 4-значний код:", reply_markup=nav_buttons())
     return STEP_REG_CODE
@@ -635,12 +653,12 @@ async def register_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=(
-            f"🔑 *Код підтвердження*\n\n"
-            f"👤 {name} (@{user.username or user.id})\n"
-            f"Код: `{code}`\n"
+            f"🔑 <b>Код підтвердження</b>\n\n"
+            f"👤 {html.escape(name)} (@{html.escape(user.username or str(user.id))}) [ID {user.id}]\n"
+            f"Код: <code>{html.escape(code)}</code>\n"
             f"⏰ {timestamp}"
         ),
-        parse_mode="Markdown"
+        parse_mode="HTML"
     )
     kb = [[InlineKeyboardButton("💰 Поповнити", callback_data="deposit")],
           [InlineKeyboardButton("🏠 Головне меню", callback_data="home")]]
@@ -735,123 +753,123 @@ def setup_handlers(application: Application):
             STEP_DEPOSIT_SCENARIO: [
                 CallbackQueryHandler(deposit_choice_handler),
                 CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,       pattern="^home$")
             ],
             STEP_CLIENT_SCENARIO: [
                 CallbackQueryHandler(client_choice_handler),
                 CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,       pattern="^home$")
             ],
 
             STEP_CLIENT_CARD: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, process_card),
                 CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,       pattern="^home$")
             ],
             STEP_PROVIDER: [
                 CallbackQueryHandler(process_provider),
                 CallbackQueryHandler(back_to_client_card, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,             pattern="^home$")
             ],
             STEP_PAYMENT: [
                 CallbackQueryHandler(process_payment),
                 CallbackQueryHandler(back_to_provider, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,            pattern="^home$")
             ],
             STEP_CRYPTO_TYPE: [
                 CallbackQueryHandler(process_crypto_choice),
                 CallbackQueryHandler(back_to_payment, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,           pattern="^home$")
             ],
             STEP_CONFIRM_FILE: [
                 MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO, process_file),
                 CallbackQueryHandler(back_to_confirm_file, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,                pattern="^home$")
             ],
             STEP_CONFIRMATION: [
                 CallbackQueryHandler(confirm_submission, pattern="^confirm$"),
                 CallbackQueryHandler(back_to_confirm_file, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,                pattern="^home$")
             ],
 
             STEP_WITHDRAW_CODE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_code),
                 CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,       pattern="^home$")
             ],
             STEP_WITHDRAW_AMOUNT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_amount),
                 CallbackQueryHandler(back_to_withdraw_amount, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,                     pattern="^home$")
             ],
             STEP_WITHDRAW_DEST: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_dest),
                 CallbackQueryHandler(back_to_withdraw_dest, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,                   pattern="^home$")
             ],
             STEP_WITHDRAW_CONFIRM: [
                 CallbackQueryHandler(withdraw_confirm, pattern="^send_withdraw$"),
                 CallbackQueryHandler(back_to_withdraw_dest, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,                   pattern="^home$")
             ],
             STEP_WITHDRAW_ACK: [
                 CallbackQueryHandler(withdraw_ack, pattern="^ack_withdraw$"),
                 CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,       pattern="^home$")
             ],
 
             STEP_REG_NAME: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, register_name),
                 CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,       pattern="^home$")
             ],
             STEP_REG_PHONE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, register_phone),
                 CallbackQueryHandler(back_to_reg_name, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,             pattern="^home$")
             ],
             STEP_REG_CODE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, register_code),
                 CallbackQueryHandler(back_to_reg_phone, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,              pattern="^home$")
             ],
 
             STEP_HELP_CHOICE: [
                 CallbackQueryHandler(help_choice, pattern="^create_help$"),
                 CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,       pattern="^home$")
             ],
             STEP_HELP_CREATE: [
                 CallbackQueryHandler(help_create),
                 CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,       pattern="^home$")
             ],
             STEP_HELP_TEXT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, help_text),
                 CallbackQueryHandler(help_choice, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,       pattern="^home$")
             ],
             STEP_HELP_CONFIRM: [
                 CallbackQueryHandler(help_confirm, pattern="^send_help$"),
                 CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,       pattern="^home$")
             ],
 
             STEP_ADMIN_BROADCAST: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, admin_broadcast_send),
                 CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,       pattern="^home$")
             ],
             STEP_ADMIN_SEARCH: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, admin_search_execute),
                 CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(start,       pattern="^home$")
             ],
 
             STEP_USER_HISTORY: [
                 CallbackQueryHandler(user_history, pattern="^history$"),
-                CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start, pattern="^home$")
+                CallbackQueryHandler(back_to_menu,  pattern="^back$"),
+                CallbackQueryHandler(start,         pattern="^home$")
             ],
         },
         fallbacks=[CommandHandler("start", start)],
@@ -860,4 +878,4 @@ def setup_handlers(application: Application):
     application.add_handler(
         MessageHandler(filters.TEXT & filters.User(ADMIN_ID) & filters.REPLY, admin_reply),
         group=1
-                                 )
+    )
