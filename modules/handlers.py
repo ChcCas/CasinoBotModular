@@ -13,12 +13,13 @@ from modules.config import ADMIN_ID, DB_NAME
     STEP_CLIENT_CARD,
     STEP_PROVIDER,
     STEP_PAYMENT,
+    STEP_CRYPTO_TYPE,
     STEP_CONFIRM_FILE,
     STEP_CONFIRMATION,
     STEP_REG_NAME,
     STEP_REG_PHONE,
     STEP_REG_CODE,
-) = range(9)
+) = range(10)
 
 PROVIDERS = ["🏆 CHAMPION", "🎰 SUPEROMATIC"]
 PAYMENTS = ["Карта", "Криптопереказ"]
