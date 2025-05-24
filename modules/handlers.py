@@ -201,7 +201,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_MENU
 
 
-# ——— Флоу “Я Клієнт” ——————————————————————
+# ——— Флоу “ Клієнт” ——————————————————————
 async def process_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     card = update.message.text.strip()
     if not re.fullmatch(r"\d{4,5}", card):
@@ -226,12 +226,36 @@ async def process_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_PAYMENT
 
 async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query; await query.answer()
-    if query.data in ("back", "home"):
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    # Обробка ◀️ Назад / 🏠 Головне меню
+    if data in ("back", "home"):
         return await menu_handler(update, context)
 
-    context.user_data["payment"] = query.data
-    await query.message.reply_text("Завантажте файл підтвердження (фото/документ/відео):", reply_markup=nav_buttons())
+    context.user_data["payment"] = data
+
+    if data == "Карта":
+        # Нова інструкція для карткового переказу
+        text = (
+            "Будь ласка, зробіть переказ на карту:\n\n"
+            "Тарасюк Віталій\n"
+            "Ощадбанк\n"
+            "4790 7299 5675 1465\n\n"
+            "Після переказу надшліть підтвердження будь-яким зручним способом:\n"
+            "– фото (скріншот)\n"
+            "– документ (PDF тощо)\n"
+            "– відео"
+        )
+        await query.message.reply_text(text, reply_markup=nav_buttons())
+    else:
+        # Криптопереказ залишаємо стандарт
+        await query.message.reply_text(
+            "Завантажте файл підтвердження переказу (фото/документ/відео):",
+            reply_markup=nav_buttons()
+        )
+
     return STEP_CONFIRM_FILE
 
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
