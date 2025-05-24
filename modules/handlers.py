@@ -104,84 +104,20 @@ HELP_CATEGORIES = [
 ]
 
 # ——— Утиліти ——————————————————————————————————
-def nav_buttons():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("◀️ Назад", callback_data="back")],
-        [InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
-    ])
+def build_nav(show_back: bool = True, show_home: bool = True) -> InlineKeyboardMarkup:
+    """
+    Клавіатура з кнопками ◀️ Назад і/або 🏠 Головне меню.
+    """
+    row = []
+    if show_back:
+        row.append(InlineKeyboardButton("◀️ Назад", callback_data="back"))
+    if show_home:
+        row.append(InlineKeyboardButton("🏠 Головне меню", callback_data="home"))
+    return InlineKeyboardMarkup([row])
 
-def now_kyiv():
+def now_kyiv() -> str:
+    """Поточний час у Києві."""
     return datetime.now(ZoneInfo("Europe/Kiev")).strftime("%Y-%m-%d %H:%M:%S")
-
-# ——— Хендлери “Назад” ——————————————————————————————————
-async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await start(update, context)
-
-async def back_to_client_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    await update.callback_query.message.edit_text(
-        "Введіть номер картки для поповнення:", reply_markup=nav_buttons()
-    )
-    return STEP_CLIENT_CARD
-
-async def back_to_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS] + [
-        [InlineKeyboardButton("◀️ Назад", callback_data="back"),
-         InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
-    ]
-    await update.callback_query.message.edit_text("Оберіть провайдера:", reply_markup=InlineKeyboardMarkup(kb))
-    return STEP_PROVIDER
-
-async def back_to_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PAYMENTS] + [
-        [InlineKeyboardButton("◀️ Назад", callback_data="back"),
-         InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
-    ]
-    await update.callback_query.message.edit_text("Оберіть метод оплати:", reply_markup=InlineKeyboardMarkup(kb))
-    return STEP_PAYMENT
-
-async def back_to_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    crypto_kb = [
-        [InlineKeyboardButton("Trustee Plus", callback_data="Trustee Plus")],
-        [InlineKeyboardButton("Telegram Wallet", callback_data="Telegram Wallet")],
-        [InlineKeyboardButton("Coinbase Wallet", callback_data="Coinbase Wallet")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="back"),
-         InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
-    ]
-    await update.callback_query.message.edit_text("Оберіть метод криптопереказу:", reply_markup=InlineKeyboardMarkup(crypto_kb))
-    return STEP_CRYPTO_TYPE
-
-async def back_to_confirm_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    await update.callback_query.message.edit_text(
-        "Після переказу надшліть підтвердження (фото/документ/відео):", reply_markup=nav_buttons()
-    )
-    return STEP_CONFIRM_FILE
-
-async def back_to_withdraw_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    await update.callback_query.message.edit_text("Введіть суму виведення (мінімум 200):", reply_markup=nav_buttons())
-    return STEP_WITHDRAW_AMOUNT
-
-async def back_to_withdraw_dest(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    await update.callback_query.message.edit_text(
-        "Введіть реквізити (16 цифр картки або крипто-адресу):", reply_markup=nav_buttons()
-    )
-    return STEP_WITHDRAW_DEST
-
-async def back_to_reg_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    await update.callback_query.message.edit_text("Введіть номер телефону (0XXXXXXXXX):", reply_markup=nav_buttons())
-    return STEP_REG_PHONE
-
-async def back_to_reg_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    await update.callback_query.message.edit_text("Введіть ім’я або нікнейм:", reply_markup=nav_buttons())
-    return STEP_REG_NAME
 
 # ——— /start ——————————————————————————————————
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -202,58 +138,69 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(kb))
     return STEP_MENU
 
-# ——— Головне меню ——————————————————————————————————
+# ——— Меню ——————————————————————————————————
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     d = query.data
 
     if d == "admin_panel":
+        # Адмін-панель
         kb = [
             [InlineKeyboardButton("👤 Історія реєстрацій", callback_data="admin_history_reg")],
             [InlineKeyboardButton("💰 Історія поповнень", callback_data="admin_history_dep")],
             [InlineKeyboardButton("💸 Історія виведень", callback_data="admin_history_wd")],
             [InlineKeyboardButton("✉️ Розсилка", callback_data="admin_broadcast")],
             [InlineKeyboardButton("🔍 Пошук", callback_data="admin_search")],
-            [InlineKeyboardButton("◀️ Назад", callback_data="admin_panel")],
+            [InlineKeyboardButton("◀️ Назад", callback_data="back_admin")],
             [InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
         ]
         await query.message.edit_text("📊 Адмін-панель", reply_markup=InlineKeyboardMarkup(kb))
         return STEP_ADMIN_PANEL
 
     if d == "deposit":
+        # Вибір сценарію поповнення
         kb = [
             [InlineKeyboardButton("Як клієнт", callback_data="deposit_card")],
             [InlineKeyboardButton("Грати без картки", callback_data="no_card")],
-            [InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
+            [InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
         ]
         await query.message.edit_text("Як бажаєте поповнити?", reply_markup=InlineKeyboardMarkup(kb))
         return STEP_DEPOSIT_SCENARIO
 
     if d == "client":
+        # Сценарії клієнта
         kb = [
             [InlineKeyboardButton("Ввести картку", callback_data="enter_card")],
             [InlineKeyboardButton("Зняти кешбек", callback_data="withdraw_cashback")],
-            [InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
+            [InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
         ]
         await query.message.edit_text("Оберіть дію:", reply_markup=InlineKeyboardMarkup(kb))
         return STEP_CLIENT_SCENARIO
 
     if d == "withdraw":
-        await query.message.edit_text("Введіть код заявки (00-00-00-00-00-00-00):", reply_markup=nav_buttons())
+        await query.message.edit_text(
+            "Введіть код заявки (00-00-00-00-00-00-00):",
+            reply_markup=build_nav()
+        )
         return STEP_WITHDRAW_CODE
 
     if d == "register":
-        await query.message.edit_text("Введіть ім’я або нікнейм:", reply_markup=nav_buttons())
+        await query.message.edit_text(
+            "Введіть ім’я або нікнейм:",
+            reply_markup=build_nav()
+        )
         return STEP_REG_NAME
 
     if d == "help":
         kb = [
             [InlineKeyboardButton("Перейти в канал", url="https://t.me/bgm_info")],
             [InlineKeyboardButton("Створити звернення", callback_data="create_help")],
-            [InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
+            [InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
         ]
         await query.message.edit_text(
-            "Якщо не знайшли відповіді:\n1️⃣ Перейдіть в канал @bgm_info\n2️⃣ Створіть звернення до підтримки",
+            "Якщо не знайшли відповіді:\n"
+            "1️⃣ Перейдіть в канал @bgm_info\n"
+            "2️⃣ Створіть звернення до підтримки",
             reply_markup=InlineKeyboardMarkup(kb)
         )
         return STEP_HELP_CHOICE
@@ -264,7 +211,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if d in ("back", "home"):
         return await start(update, context)
 
-    await query.message.edit_text("Функція в розробці.", reply_markup=nav_buttons())
+    # Фallback
+    await query.message.edit_text("Функція в розробці.", reply_markup=build_nav())
     return STEP_MENU
 
 # ——— Адмін-панель ——————————————————————————————————
@@ -272,11 +220,9 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query; await query.answer()
     cmd = query.data
 
-    # «Назад» у адмін-панелі → знову admin_panel
-    if cmd == "admin_panel":
+    # Назад всередині адмін-панелі
+    if cmd == "back_admin":
         return await menu_handler(update, context)
-
-    # Головне меню
     if cmd == "home":
         return await start(update, context)
 
@@ -290,9 +236,10 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"#{r[0]} 👤 {r[2]} (@ID:{r[1]}) | 📞{r[3]} | [{r[4]}] | ⏰{r[5]}"
             for r in rows
         )
-        kb = [[InlineKeyboardButton("◀️ Назад", callback_data="admin_panel")],
-              [InlineKeyboardButton("🏠 Головне меню", callback_data="home")]]
-        await query.message.edit_text(f"📋 Історія реєстрацій:\n\n{text}", reply_markup=InlineKeyboardMarkup(kb))
+        await query.message.edit_text(
+            f"📋 Історія реєстрацій:\n\n{text}",
+            reply_markup=build_nav(show_back=True)
+        )
         return STEP_ADMIN_PANEL
 
     # Історія поповнень
@@ -306,9 +253,10 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"   🏷 Картка: {r[3]}\n   🏭 Провайдер: {r[4]}\n   💳 Метод: {r[5]}\n   ⏰ {r[6]}"
             for r in rows
         )
-        kb = [[InlineKeyboardButton("◀️ Назад", callback_data="admin_panel")],
-              [InlineKeyboardButton("🏠 Головне меню", callback_data="home")]]
-        await query.message.edit_text(f"💰 Історія поповнень:\n\n{text}", reply_markup=InlineKeyboardMarkup(kb))
+        await query.message.edit_text(
+            f"💰 Історія поповнень:\n\n{text}",
+            reply_markup=build_nav(show_back=True)
+        )
         return STEP_ADMIN_PANEL
 
     # Історія виведень
@@ -322,39 +270,42 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"   💸 Сума: {r[3]}\n   🏷 Метод: {r[4]}\n   📥 Реквізити: {r[5]}\n   🔢 Код: {r[6]}\n   ⏰ {r[7]}"
             for r in rows
         )
-        kb = [[InlineKeyboardButton("◀️ Назад", callback_data="admin_panel")],
-              [InlineKeyboardButton("🏠 Головне меню", callback_data="home")]]
-        await query.message.edit_text(f"📄 Історія виведень:\n\n{text}", reply_markup=InlineKeyboardMarkup(kb))
+        await query.message.edit_text(
+            f"📄 Історія виведень:\n\n{text}",
+            reply_markup=build_nav(show_back=True)
+        )
         return STEP_ADMIN_PANEL
 
     # Розсилка
     if cmd == "admin_broadcast":
-        kb = [[InlineKeyboardButton("◀️ Назад", callback_data="admin_panel")],
-              [InlineKeyboardButton("🏠 Головне меню", callback_data="home")]]
-        await query.message.edit_text("✉️ Введіть текст для розсилки:", reply_markup=InlineKeyboardMarkup(kb))
+        await query.message.edit_text(
+            "✉️ Введіть текст для розсилки:",
+            reply_markup=build_nav()
+        )
         return STEP_ADMIN_BROADCAST
 
     # Пошук
     if cmd == "admin_search":
-        kb = [[InlineKeyboardButton("◀️ Назад", callback_data="admin_panel")],
-              [InlineKeyboardButton("🏠 Головне меню", callback_data="home")]]
-        await query.message.edit_text("🔍 Введіть user_id або username для пошуку:", reply_markup=InlineKeyboardMarkup(kb))
+        await query.message.edit_text(
+            "🔍 Введіть user_id або username для пошуку:",
+            reply_markup=build_nav()
+        )
         return STEP_ADMIN_SEARCH
 
     return STEP_ADMIN_PANEL
 
-# ——— Сценарій “Допомога” ——————————————————————————————————
+# ——— “Допомога” ——————————————————————————————————
 async def help_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     kb = [[InlineKeyboardButton(cat, callback_data=cat)] for cat in HELP_CATEGORIES]
-    kb += [[InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")]]
+    kb.append([InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")])
     await query.message.edit_text("🆘 Оберіть категорію звернення:", reply_markup=InlineKeyboardMarkup(kb))
     return STEP_HELP_CREATE
 
 async def help_create(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     context.user_data["help_category"] = query.data
-    await query.message.edit_text(f"✍️ Введіть текст зверення для «{query.data}»:", reply_markup=nav_buttons())
+    await query.message.edit_text(f"✍️ Введіть текст зверення для «{query.data}»:", reply_markup=build_nav())
     return STEP_HELP_TEXT
 
 async def help_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -371,7 +322,7 @@ async def help_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     cat = context.user_data["help_category"]
     txt = context.user_data["help_text"]
-    ts = now_kyiv()
+    ts  = now_kyiv()
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("INSERT INTO helps(user_id,category,text) VALUES (?,?,?)", (user.id, cat, txt))
         conn.commit()
@@ -386,67 +337,65 @@ async def help_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ),
         parse_mode="Markdown"
     )
-    await query.message.edit_text("✅ Заявку надіслано. Чекайте відповіді.", reply_markup=nav_buttons())
+    await query.message.edit_text("✅ Заявку надіслано. Чекайте відповіді.", reply_markup=build_nav())
     return STEP_MENU
 
-# ——— Сценарій “Поповнити” ——————————————————————————————————
+# ——— “Поповнити” ——————————————————————————————————
 async def deposit_choice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     if query.data == "deposit_card":
-        await query.message.edit_text("📥 Введіть номер картки для поповнення:", reply_markup=nav_buttons())
+        await query.message.edit_text("📥 Введіть номер картки для поповнення:", reply_markup=build_nav())
         return STEP_CLIENT_CARD
-    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS] + [
-        [InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
-    ]
+    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS]
+    kb.append([InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")])
     await query.message.edit_text("🏭 Оберіть провайдера:", reply_markup=InlineKeyboardMarkup(kb))
     return STEP_PROVIDER
 
 async def client_choice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     if query.data == "enter_card":
-        await query.message.edit_text("📥 Введіть номер картки клубу:", reply_markup=nav_buttons())
+        await query.message.edit_text("📥 Введіть номер картки клубу:", reply_markup=build_nav())
         return STEP_CLIENT_CARD
-    await query.message.edit_text("🎁 Функція зняття кешбеку в розробці.", reply_markup=nav_buttons())
+    await query.message.edit_text("🎁 Функція зняття кешбеку в розробці.", reply_markup=build_nav())
     return STEP_MENU
 
 # ——— Флоу поповнення ——————————————————————————————————
 async def process_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     card = update.message.text.strip()
     if not re.fullmatch(r"\d{4,5}", card):
-        await update.message.reply_text("❗ Невірний формат картки.", reply_markup=nav_buttons())
+        await update.message.reply_text("❗ Невірний формат картки.", reply_markup=build_nav())
         return STEP_CLIENT_CARD
     context.user_data["card"] = card
-    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS] + [
-        [InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
-    ]
+    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS]
+    kb.append([InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")])
     await update.message.reply_text("🏭 Оберіть провайдера:", reply_markup=InlineKeyboardMarkup(kb))
     return STEP_PROVIDER
 
 async def process_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     if query.data in ("back", "home"):
-        return await menu_handler(update, context)
+        return await start(update, context)
     context.user_data["provider"] = query.data
-    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PAYMENTS] + [
-        [InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
-    ]
+    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PAYMENTS]
+    kb.append([InlineKeyboardButton("◀️ Назад", callback_data="back"), InlineKeyboardButton("🏠 Головне меню", callback_data="home")])
     await query.message.reply_text("💳 Оберіть метод оплати:", reply_markup=InlineKeyboardMarkup(kb))
     return STEP_PAYMENT
 
 async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     if query.data in ("back", "home"):
-        return await menu_handler(update, context)
+        return await start(update, context)
     choice = query.data
     context.user_data["payment"] = choice
     if choice == "Карта":
         await query.message.reply_text(
-            "💵 Переказуйте на картку:\nТарасюк Віталій\nОщадбанк 4790 7299 5675 1465\n\n"
+            "💵 Переказуйте на картку:\n"
+            "Тарасюк Віталій\nОщадбанк 4790 7299 5675 1465\n\n"
             "Після переказу надішліть підтвердження (фото/пдф/відео).",
-            reply_markup=nav_buttons()
+            reply_markup=build_nav()
         )
         return STEP_CONFIRM_FILE
-    # крипто
+    # крипто-сценарій
     crypto_kb = [
         [InlineKeyboardButton("Trustee Plus", callback_data="Trustee Plus")],
         [InlineKeyboardButton("Telegram Wallet", callback_data="Telegram Wallet")],
@@ -459,17 +408,17 @@ async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def process_crypto_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     if query.data in ("back", "home"):
-        return await menu_handler(update, context)
+        return await start(update, context)
     choice = query.data
     context.user_data["payment"] = choice
     if choice == "Trustee Plus":
         await query.message.reply_text(
             "🔗 Переказуйте USDT на Trustee Plus\nID: bgm001\n\n"
             "Надішліть підтвердження (фото/документ/відео).",
-            reply_markup=nav_buttons()
+            reply_markup=build_nav()
         )
         return STEP_CONFIRM_FILE
-    await query.message.reply_text(f"❗ Метод «{choice}» в розробці.", reply_markup=nav_buttons())
+    await query.message.reply_text(f"❗ Метод «{choice}» в розробці.", reply_markup=build_nav())
     return STEP_MENU
 
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -514,32 +463,33 @@ async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         conn.execute(
             "INSERT INTO deposits(user_id,username,card,provider,payment,file_type) VALUES (?,?,?,?,?,?)",
-            (user.id, user.username or "", card, provider, payment, file_msg.effective_attachment.__class__.__name__)
+            (user.id, user.username or "", card, provider, payment,
+             file_msg.effective_attachment.__class__.__name__)
         )
         conn.commit()
 
-    await query.message.edit_text("✅ Ваша заявка на поповнення надіслана.", reply_markup=nav_buttons())
+    await query.message.edit_text("✅ Ваша заявка на поповнення надіслана.", reply_markup=build_nav())
     return STEP_MENU
 
-# ——— Флоу “Виведення” ——————————————————————————————————
+# ——— “Виведення” ——————————————————————————————————
 async def withdraw_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code = update.message.text.strip()
     if not re.fullmatch(r'(?:\d{2}-){6}\d{2}', code):
-        await update.message.reply_text("❗ Невірний формат коду.", reply_markup=nav_buttons())
+        await update.message.reply_text("❗ Невірний формат коду.", reply_markup=build_nav())
         return STEP_WITHDRAW_CODE
     context.user_data["withdraw_code"] = code
-    await update.message.reply_text("💰 Введіть суму виведення (мінімум 200):", reply_markup=nav_buttons())
+    await update.message.reply_text("💰 Введіть суму виведення (мінімум 200):", reply_markup=build_nav())
     return STEP_WITHDRAW_AMOUNT
 
 async def withdraw_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     amt = update.message.text.strip()
     if not amt.isdigit() or int(amt) < 200:
-        await update.message.reply_text("❗ Некоректна сума.", reply_markup=nav_buttons())
+        await update.message.reply_text("❗ Некоректна сума.", reply_markup=build_nav())
         return STEP_WITHDRAW_AMOUNT
     context.user_data["withdraw_amount"] = amt
     await update.message.reply_text(
         "📥 Введіть реквізити для виведення:\n– 16 цифр картки або крипто-адресу",
-        reply_markup=nav_buttons()
+        reply_markup=build_nav()
     )
     return STEP_WITHDRAW_DEST
 
@@ -582,23 +532,20 @@ async def withdraw_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def withdraw_ack(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     user  = update.effective_user
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"✔️ @{user.username or user.id} підтвердив отримання коштів."
-    )
-    await query.message.edit_text("✅ Дякуємо за підтвердження!", reply_markup=nav_buttons())
+    await context.bot.send_message(chat_id=ADMIN_ID, text=f"✔️ @{user.username or user.id} підтвердив отримання коштів.")
+    await query.message.edit_text("✅ Дякую!", reply_markup=build_nav())
     return STEP_MENU
 
-# ——— Флоу “Реєстрація” ——————————————————————————————————
+# ——— “Реєстрація” ——————————————————————————————————
 async def register_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["reg_name"] = update.message.text.strip()
-    await update.message.reply_text("📝 Введіть номер телефону (0XXXXXXXXX):", reply_markup=nav_buttons())
+    await update.message.reply_text("📝 Введіть номер телефону (0XXXXXXXXX):", reply_markup=build_nav())
     return STEP_REG_PHONE
 
 async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     phone = update.message.text.strip()
     if not re.fullmatch(r"0\d{9}", phone):
-        await update.message.reply_text("❗ Невірний формат телефону.", reply_markup=nav_buttons())
+        await update.message.reply_text("❗ Невірний формат телефону.", reply_markup=build_nav())
         return STEP_REG_PHONE
     context.user_data["reg_phone"] = phone
     name = context.user_data["reg_name"]
@@ -616,13 +563,13 @@ async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ),
         parse_mode="HTML"
     )
-    await update.message.reply_text("✅ Реєстрацію розпочато. Введіть 4-значний код:", reply_markup=nav_buttons())
+    await update.message.reply_text("✅ Реєстрацію розпочато. Введіть 4-значний код:", reply_markup=build_nav())
     return STEP_REG_CODE
 
 async def register_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code = update.message.text.strip()
     if not re.fullmatch(r"\d{4}", code):
-        await update.message.reply_text("❗ Невірний код.", reply_markup=nav_buttons())
+        await update.message.reply_text("❗ Невірний код.", reply_markup=build_nav())
         return STEP_REG_CODE
     name = context.user_data["reg_name"]
     user = update.effective_user
@@ -637,11 +584,8 @@ async def register_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ),
         parse_mode="HTML"
     )
-    kb = [
-        [InlineKeyboardButton("💰 Поповнити", callback_data="deposit")],
-        [InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
-    ]
-    await update.message.reply_text("✅ Код відправлено адміністрації.", reply_markup=InlineKeyboardMarkup(kb))
+    kb = [[InlineKeyboardButton("💰 Поповнити", callback_data="deposit")], [InlineKeyboardButton("🏠 Головне меню", callback_data="home")]]
+    await update.message.reply_text("✅ Код відправлено адміністратору.", reply_markup=InlineKeyboardMarkup(kb))
     return STEP_MENU
 
 # ——— Адмін: розсилка та пошук ——————————————————————————————————
@@ -654,7 +598,7 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
             await context.bot.send_message(chat_id=uid, text=txt)
         except:
             pass
-    await update.message.reply_text("✅ Розсилка виконана.", reply_markup=nav_buttons())
+    await update.message.reply_text("✅ Розсилка виконана.", reply_markup=build_nav())
     return STEP_MENU
 
 async def admin_search_execute(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -671,11 +615,11 @@ async def admin_search_execute(update: Update, context: ContextTypes.DEFAULT_TYP
             ths = cur.execute("SELECT admin_msg_id,user_msg_id,provider FROM threads WHERE user_id=?", (uid,)).fetchall()
             hdr = f"Результати для user_id={uid}"
     sections = [f"🔎 {hdr}"]
-    sections.append("Реєстрації:\n" + ("\n".join(f"#{r[0]} uid:{r[1]} {r[2]}|{r[3]}|[{r[4]}]|{r[5]}" for r in regs) or "немає"))
-    sections.append("Поповнення:\n" + ("\n".join(f"#{r[0]} uid:{r[1]} {r[2]}|{r[3]}|{r[4]}|{r[5]}|{r[6]}" for r in deps) or "немає"))
-    sections.append("Виведення:\n" + ("\n".join(f"#{r[0]} uid:{r[1]} {r[2]}|{r[3]}|{r[4]}|{r[5]}|код:{r[6]}|{r[7]}" for r in wds) or "немає"))
-    sections.append("Повідомлення:\n" + ("\n".join(f"admin_msg_id={r[0]} ↔ user_msg_id={r[1]} (prov={r[2]})" for r in ths) or "немає"))
-    await update.message.reply_text("\n\n".join(sections), reply_markup=nav_buttons())
+    sections.append("Реєстрації:\n" + ( "\n".join(f"#{r[0]} uid:{r[1]} {r[2]}|{r[3]}|[{r[4]}]|{r[5]}" for r in regs) or "немає" ))
+    sections.append("Поповнення:\n" + ( "\n".join(f"#{r[0]} uid:{r[1]} {r[2]}|{r[3]}|{r[4]}|{r[5]}|{r[6]}" for r in deps) or "немає" ))
+    sections.append("Виведення:\n" + ( "\n".join(f"#{r[0]} uid:{r[1]} {r[2]}|{r[3]}|{r[4]}|{r[5]}|код:{r[6]}|{r[7]}" for r in wds) or "немає" ))
+    sections.append("Повідомлення:\n" + ( "\n".join(f"admin_msg_id={r[0]} ↔ user_msg_id={r[1]} (prov={r[2]})" for r in ths) or "немає" ))
+    await update.message.reply_text("\n\n".join(sections), reply_markup=build_nav())
     return STEP_MENU
 
 # ——— Особиста історія клієнта ——————————————————————————————————
@@ -695,7 +639,7 @@ async def user_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🔸 Виведення:\n{wds_text}\n\n"
         f"💬 Повідомлення:\n{ths_text}"
     )
-    await query.message.edit_text(text, parse_mode="Markdown", reply_markup=nav_buttons())
+    await query.message.edit_text(text, parse_mode="Markdown", reply_markup=build_nav())
     return STEP_MENU
 
 # ——— Відповідь адміна на заявку ——————————————————————————————————
@@ -726,118 +670,118 @@ def setup_handlers(application: Application):
             STEP_ADMIN_PANEL: [CallbackQueryHandler(admin_panel_handler)],
             STEP_DEPOSIT_SCENARIO: [
                 CallbackQueryHandler(deposit_choice_handler),
-                CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start,       pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_CLIENT_SCENARIO: [
                 CallbackQueryHandler(client_choice_handler),
-                CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start,       pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_CLIENT_CARD: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, process_card),
-                CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start,       pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_PROVIDER: [
                 CallbackQueryHandler(process_provider),
-                CallbackQueryHandler(back_to_client_card, pattern="^back$"),
-                CallbackQueryHandler(start,             pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_PAYMENT: [
                 CallbackQueryHandler(process_payment),
-                CallbackQueryHandler(back_to_provider, pattern="^back$"),
-                CallbackQueryHandler(start,            pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_CRYPTO_TYPE: [
                 CallbackQueryHandler(process_crypto_choice),
-                CallbackQueryHandler(back_to_payment, pattern="^back$"),
-                CallbackQueryHandler(start,           pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_CONFIRM_FILE: [
                 MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO, process_file),
-                CallbackQueryHandler(back_to_confirm_file, pattern="^back$"),
-                CallbackQueryHandler(start,                pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_CONFIRMATION: [
                 CallbackQueryHandler(confirm_submission, pattern="^confirm$"),
-                CallbackQueryHandler(back_to_confirm_file, pattern="^back$"),
-                CallbackQueryHandler(start,                pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_WITHDRAW_CODE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_code),
-                CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start,       pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_WITHDRAW_AMOUNT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_amount),
-                CallbackQueryHandler(back_to_withdraw_amount, pattern="^back$"),
-                CallbackQueryHandler(start,                     pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_WITHDRAW_DEST: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_dest),
-                CallbackQueryHandler(back_to_withdraw_dest, pattern="^back$"),
-                CallbackQueryHandler(start,                   pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_WITHDRAW_CONFIRM: [
                 CallbackQueryHandler(withdraw_confirm, pattern="^send_withdraw$"),
-                CallbackQueryHandler(back_to_withdraw_dest, pattern="^back$"),
-                CallbackQueryHandler(start,                   pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_WITHDRAW_ACK: [
                 CallbackQueryHandler(withdraw_ack, pattern="^ack_withdraw$"),
-                CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start,       pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_REG_NAME: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, register_name),
-                CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start,       pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_REG_PHONE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, register_phone),
-                CallbackQueryHandler(back_to_reg_name, pattern="^back$"),
-                CallbackQueryHandler(start,             pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_REG_CODE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, register_code),
-                CallbackQueryHandler(back_to_reg_phone, pattern="^back$"),
-                CallbackQueryHandler(start,              pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_HELP_CHOICE: [
-                CallbackQueryHandler(help_choice, pattern="^create_help$"),
-                CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start,       pattern="^home$")
+                CallbackQueryHandler(help_choice),
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_HELP_CREATE: [
                 CallbackQueryHandler(help_create),
-                CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start,       pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_HELP_TEXT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, help_text),
-                CallbackQueryHandler(help_choice, pattern="^back$"),
-                CallbackQueryHandler(start,       pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_HELP_CONFIRM: [
                 CallbackQueryHandler(help_confirm, pattern="^send_help$"),
-                CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start,       pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_ADMIN_BROADCAST: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, admin_broadcast_send),
-                CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start,       pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_ADMIN_SEARCH: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, admin_search_execute),
-                CallbackQueryHandler(back_to_menu, pattern="^back$"),
-                CallbackQueryHandler(start,       pattern="^home$")
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
             STEP_USER_HISTORY: [
-                CallbackQueryHandler(user_history, pattern="^history$"),
-                CallbackQueryHandler(back_to_menu,  pattern="^back$"),
-                CallbackQueryHandler(start,         pattern="^home$")
+                CallbackQueryHandler(user_history),
+                CallbackQueryHandler(start, pattern="^home$"),
+                CallbackQueryHandler(menu_handler, pattern="^back$")
             ],
         },
         fallbacks=[CommandHandler("start", start)],
@@ -846,4 +790,4 @@ def setup_handlers(application: Application):
     application.add_handler(
         MessageHandler(filters.TEXT & filters.User(ADMIN_ID) & filters.REPLY, admin_reply),
         group=1
-    )
+        )
