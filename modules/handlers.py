@@ -80,7 +80,7 @@ def nav_buttons():
 # ——— /start ——————————————————————————————————
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("🎲 Я Клієнт", callback_data="client")],
+        [InlineKeyboardButton("🎲 Клієнт", callback_data="client")],
         [InlineKeyboardButton("📝 Реєстрація", callback_data="register")],
         [InlineKeyboardButton("💰 Поповнити", callback_data="deposit")],
         [InlineKeyboardButton("💸 Вивід коштів", callback_data="withdraw")],
@@ -89,7 +89,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id == ADMIN_ID:
         keyboard.append([InlineKeyboardButton("🛠 Адмін-панель", callback_data="admin_panel")])
-    text = "Вітаємо у Casino Club Telegram Bot! Оберіть дію:"
+    text = "Вітаємо у BIG BAME MONEY Bot! Оберіть дію:"
     if update.message:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     else:
