@@ -2,10 +2,61 @@ import re
 import sqlite3
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, Message
 from telegram.ext import (
-    CommandHandler, CallbackQueryHandler, ConversationHandler,
-    MessageHandler, filters, ContextTypes
+    CommandHandler,
+    CallbackQueryHandler,
+    ConversationHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
 )
 from modules.config import ADMIN_ID, DB_NAME
+
+# === Ініціалізація схеми БД (створюємо таблиці, якщо їх ще не існує) ===
+with sqlite3.connect(DB_NAME) as conn:
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS registrations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            name TEXT,
+            phone TEXT,
+            status TEXT DEFAULT 'pending',
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS deposits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            username TEXT,
+            card TEXT,
+            provider TEXT,
+            payment TEXT,
+            file_type TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS withdrawals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            username TEXT,
+            amount TEXT,
+            method TEXT,
+            details TEXT,
+            source_code TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS threads (
+            admin_msg_id INTEGER PRIMARY KEY,
+            user_id       INTEGER,
+            user_msg_id   INTEGER,
+            provider      TEXT
+        )
+    """)
+    conn.commit()
+
 
 # ——— Стани ——————————————————————————————————
 (
@@ -33,6 +84,7 @@ from modules.config import ADMIN_ID, DB_NAME
 
 PROVIDERS = ["🏆 CHAMPION", "🎰 SUPEROMATIC"]
 PAYMENTS  = ["Карта", "Криптопереказ"]
+
 
 def setup_handlers(application):
     conv = ConversationHandler(
@@ -138,11 +190,13 @@ def setup_handlers(application):
         group=1
     )
 
+
 def nav_buttons():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("◀️ Назад", callback_data="back")],
         [InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
     ])
+
 
 # — /start ——————————————————————————————————
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -163,10 +217,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.message.edit_text(text, reply_markup=InlineKeyboardMarkup(kb))
     return STEP_MENU
 
+
 # — Обробник головного меню та адмін-панелі ——————————————————
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    query = update.callback_query; await query.answer()
     d = query.data
 
     # Адмін-панель
@@ -240,10 +294,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Поповнити → вибір сценарію
     if d == "deposit":
         kb = [
-            [InlineKeyboardButton("Як клієнт",       callback_data="deposit_card")],
+            [InlineKeyboardButton("Як клієнт",        callback_data="deposit_card")],
             [InlineKeyboardButton("Грати без картки", callback_data="no_card")],
-            [InlineKeyboardButton("◀️ Назад",         callback_data="back"),
-             InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
+            [InlineKeyboardButton("◀️ Назад",          callback_data="back"),
+             InlineKeyboardButton("🏠 Головне меню",  callback_data="home")],
         ]
         await query.message.edit_text("Як бажаєте поповнити?", reply_markup=InlineKeyboardMarkup(kb))
         return STEP_DEPOSIT_CHOICE
@@ -257,16 +311,17 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if d == "client":
         kb = [
             [InlineKeyboardButton("Ввести номер картки", callback_data="enter_card")],
-            [InlineKeyboardButton("Зняти кешбек",       callback_data="withdraw_cashback")],
-            [InlineKeyboardButton("◀️ Назад",            callback_data="back"),
-             InlineKeyboardButton("🏠 Головне меню",    callback_data="home")],
+            [InlineKeyboardButton("Зняти кешбек",        callback_data="withdraw_cashback")],
+            [InlineKeyboardButton("◀️ Назад",             callback_data="back"),
+             InlineKeyboardButton("🏠 Головне меню",     callback_data="home")],
         ]
         await query.message.edit_text("Оберіть дію:", reply_markup=InlineKeyboardMarkup(kb))
         return STEP_CLIENT_CHOICE
 
     # Реєстрація
     if d == "register":
-        await query.message.edit_text("Введіть ім’я або нікнейм:", reply_markup=nav_buttons())
+        await query.message.edit_text("Введіть ім’я\
+ або нікнейм:", reply_markup=nav_buttons())
         return STEP_REG_NAME
 
     # Назад або Головне меню
@@ -279,8 +334,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # — Особиста історія клієнта ——————————————————————————
 async def user_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    query = update.callback_query; await query.answer()
     uid = query.from_user.id
     with sqlite3.connect(DB_NAME) as conn:
         deps = conn.execute(
@@ -322,12 +376,11 @@ async def user_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # — Сценарій “Поповнити” ——————————————————————————
 async def deposit_choice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    query = update.callback_query; await query.answer()
     if query.data == "deposit_card":
         await query.message.edit_text("Введіть номер картки для поповнення:", reply_markup=nav_buttons())
         return STEP_CLIENT_CARD
-    # роль “no_card” спрямовує відразу до вибору провайдера
+    # “no_card” веде до вибору провайдера
     kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS] + [[
         InlineKeyboardButton("◀️ Назад", callback_data="back"),
         InlineKeyboardButton("🏠 Головне меню", callback_data="home"),
@@ -337,8 +390,7 @@ async def deposit_choice_handler(update: Update, context: ContextTypes.DEFAULT_T
 
 # — Сценарій “Я клієнт” ——————————————————————————
 async def client_choice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    query = update.callback_query; await query.answer()
     if query.data == "enter_card":
         await query.message.edit_text("Введіть номер картки клієнта клубу:", reply_markup=nav_buttons())
         return STEP_CLIENT_CARD
@@ -360,8 +412,7 @@ async def process_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_PROVIDER
 
 async def process_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    query = update.callback_query; await query.answer()
     if query.data in ("back", "home"):
         return await menu_handler(update, context)
     context.user_data["provider"] = query.data
@@ -373,8 +424,7 @@ async def process_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_PAYMENT
 
 async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    query = update.callback_query; await query.answer()
     choice = query.data
     if choice in ("back", "home"):
         return await menu_handler(update, context)
@@ -390,7 +440,6 @@ async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_text(text, reply_markup=nav_buttons())
         return STEP_CONFIRM_FILE
 
-    # крипто
     crypto_kb = [
         [InlineKeyboardButton("Trustee Plus", callback_data="Trustee Plus")],
         [InlineKeyboardButton("Telegram Wallet", callback_data="Telegram Wallet")],
@@ -402,8 +451,7 @@ async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_CRYPTO_TYPE
 
 async def process_crypto_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    query = update.callback_query; await query.answer()
     choice = query.data
     if choice in ("back", "home"):
         return await menu_handler(update, context)
@@ -430,18 +478,15 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Натисніть для підтвердження надсилання:", reply_markup=InlineKeyboardMarkup(kb))
     return STEP_CONFIRMATION
 
-# — Оновлений confirm_submission ———————————————————
 async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
+    query = update.callback_query; await query.answer()
     user     = update.effective_user
     card     = context.user_data.get("card")
     provider = context.user_data.get("provider", "—")
     payment  = context.user_data.get("payment", "—")
     file_msg: Message = context.user_data.get("file")
 
-    # Формуємо caption
+    # Формуємо підпис
     lines = ["Нова заявка від клієнта:"]
     if card:
         lines.append(f"• Картка: {card}")
@@ -449,34 +494,10 @@ async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE)
     lines.append(f"• Метод: {payment}")
     caption = "\n".join(lines)
 
-    # Підготовка таблиць
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS threads (
-                admin_msg_id INTEGER PRIMARY KEY,
-                user_id       INTEGER,
-                user_msg_id   INTEGER,
-                provider      TEXT
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS deposits (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                username TEXT,
-                card TEXT,
-                provider TEXT,
-                payment TEXT,
-                file_type TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.commit()
-
     # Копіюємо файл адміну
     admin_msg = await file_msg.copy(chat_id=ADMIN_ID, caption=caption)
 
-    # Зберігаємо записи
+    # Записуємо у БД
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO threads(admin_msg_id,user_id,user_msg_id,provider) VALUES (?,?,?,?)",
@@ -521,7 +542,7 @@ async def withdraw_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_WITHDRAW_DEST
 
 async def withdraw_dest(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    dest = update.message.text.strip()
+    dest   = update.message.text.strip()
     method = 'card' if re.fullmatch(r'\d{16}', dest) else 'crypto'
     context.user_data["withdraw_method"] = method
     context.user_data["withdraw_dest"]   = dest
@@ -534,27 +555,14 @@ async def withdraw_dest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_WITHDRAW_CONFIRM
 
 async def withdraw_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user   = update.effective_user
-    code   = context.user_data["withdraw_code"]
-    amount = context.user_data["withdraw_amount"]
-    method = context.user_data["withdraw_method"]
-    dest   = context.user_data["withdraw_dest"]
+    query   = update.callback_query; await query.answer()
+    user    = update.effective_user
+    code    = context.user_data["withdraw_code"]
+    amount  = context.user_data["withdraw_amount"]
+    method  = context.user_data["withdraw_method"]
+    dest    = context.user_data["withdraw_dest"]
 
     with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS withdrawals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                username TEXT,
-                amount TEXT,
-                method TEXT,
-                details TEXT,
-                source_code TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
         conn.execute(
             "INSERT INTO withdrawals(user_id,username,amount,method,details,source_code) VALUES (?,?,?,?,?,?)",
             (user.id, user.username or "", amount, method, dest, code)
@@ -572,9 +580,8 @@ async def withdraw_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_WITHDRAW_ACK
 
 async def withdraw_ack(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user = update.effective_user
+    query = update.callback_query; await query.answer()
+    user  = update.effective_user
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=f"✔️ @{user.username or user.id} підтвердив отримання коштів."
@@ -597,16 +604,6 @@ async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data["reg_name"]
     await context.bot.send_message(chat_id=ADMIN_ID, text=f"Нова реєстрація: {name} | {phone}")
     with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS registrations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                name TEXT,
-                phone TEXT,
-                status TEXT DEFAULT 'pending',
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
         conn.execute(
             "INSERT INTO registrations(user_id,name,phone) VALUES (?,?,?)",
             (update.effective_user.id, name, phone)
@@ -671,23 +668,8 @@ async def admin_search_execute(update: Update, context: ContextTypes.DEFAULT_TYP
             ).fetchall()
             hdr = f"Результати для user_id={uid}"
         else:
-            regs = cur.execute(
-                "SELECT id,user_id,name,phone,status,timestamp FROM registrations WHERE name LIKE ?",
-                (f"%{param}%",)
-            ).fetchall()
-            deps = cur.execute(
-                "SELECT id,user_id,username,card,provider,payment,timestamp FROM deposits WHERE username LIKE ?",
-                (f"%{param}%",)
-            ).fetchall()
-            wds = cur.execute(
-                "SELECT id,user_id,username,amount,method,details,source_code,timestamp FROM withdrawals WHERE username LIKE ?",
-                (f"%{param}%",)
-            ).fetchall()
-            ths = cur.execute(
-                "SELECT admin_msg_id,user_msg_id,provider FROM threads WHERE user_id IN (SELECT user_id FROM registrations WHERE name LIKE ?)",
-                (f"%{param}%",)
-            ).fetchall()
-            hdr = f"Результати для '{param}'"
+            regs = deps = wds = ths = []
+            hdr = f"Нічого не знайдено для '{param}'"
 
     sections = [f"🔎 {hdr}"]
     sections.append("Реєстрації:\n" + ( "\n".join(f"#{r[0]} uid:{r[1]} {r[2]}|{r[3]}|[{r[4]}]|{r[5]}" for r in regs) if regs else "немає"))
