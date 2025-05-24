@@ -279,7 +279,13 @@ async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE)
     file_msg: Message = context.user_data.get("file")
 
     caption = f"Заявка від клієнта:\nКартка: {card}\nПровайдер: {provider}\nМетод оплати: {payment}"
-    await file_msg.copy_to(chat_id=ADMIN_ID, caption=caption)
+  await context.bot.copy_message(
+    chat_id=ADMIN_ID,
+    from_chat_id=file_msg.chat_id,
+    message_id=file_msg.message_id,
+    caption=text
+)
+
 
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
