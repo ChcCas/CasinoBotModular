@@ -6,6 +6,9 @@ from modules.routes import register_routes
 from modules.handlers import setup_handlers
 
 # === Flask app ===
+PORT        = int(os.environ.get("PORT", "8443"))
+WEBHOOK_URL = os.environ["WEBHOOK_URL"]
+
 app = Flask(__name__)
 application = (
     ApplicationBuilder()
