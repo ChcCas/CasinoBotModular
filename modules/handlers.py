@@ -1,11 +1,12 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, Message
+import re
+import sqlite3
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CommandHandler, CallbackQueryHandler, ConversationHandler,
     MessageHandler, filters, ContextTypes
 )
-import re
-import sqlite3
 from modules.config import ADMIN_ID, DB_NAME
+
 
 # === Стан ===
 (
@@ -15,7 +16,11 @@ from modules.config import ADMIN_ID, DB_NAME
     STEP_PAYMENT,
     STEP_CONFIRM_FILE,
     STEP_CONFIRMATION,
-) = range(6)
+    STEP_REG_NAME,
+    STEP_REG_PHONE,
+    STEP_REG_CODE,
+) = range(9)
+
 
 PROVIDERS = ["🏆 CHAMPION", "🎰 SUPEROMATIC"]
 PAYMENTS = ["Карта", "Криптопереказ"]
@@ -23,14 +28,112 @@ PAYMENTS = ["Карта", "Криптопереказ"]
 def setup_handlers(application):
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
-        states={
+       states={
+    STEP_MENU: [CallbackQueryHandler(menu_handler)],
+    # … ваші існуючі стани …
+    STEP_CONFIRMATION: [CallbackQueryHandler(confirm_submission)],
+
+    # Ось сюди вставляємо:
+    STEP_REG_NAME: [
+        MessageHandler(filters.TEXT & ~filters.COMMAND, register_name),
+        CallbackQueryHandler(menu_handler, pattern="^(back|home)$")
+    ],
+    STEP_REG_PHONE: [
+        MessageHandler(filters.TEXT & ~filters.COMMAND, register_phone),
+        CallbackQueryHandler(menu_handler, pattern="^(back|home)$")
+    ],
+    STEP_REG_CODE: [
+        MessageHandler(filters.TEXT & ~filters.COMMAND, register_code),
+        CallbackQueryHandler(menu_handler, pattern="^(back|home)$")
+    ],
+},
+
             STEP_MENU: [CallbackQueryHandler(menu_handler)],
             STEP_CLIENT_CARD: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_card)],
             STEP_PROVIDER: [CallbackQueryHandler(process_provider)],
             STEP_PAYMENT: [CallbackQueryHandler(process_payment)],
             STEP_CONFIRM_FILE: [MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO, process_file)],
             STEP_CONFIRMATION: [CallbackQueryHandler(confirm_submission)],
-        },
+        },async def register_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    name = update.message.text.strip()
+    context.user_data["reg_name"] = name
+    await update.message.reply_text(
+        "Введіть номер телефону (формат: 0XXXXXXXXX):",
+        reply_markup=nav_buttons()
+    )
+    return STEP_REG_PHONE
+
+async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    phone = update.message.text.strip()
+    if not re.fullmatch(r"0\d{9}", phone):
+        await update.message.reply_text(
+            "Невірний формат телефону. Спробуйте ще раз.",
+            reply_markup=nav_buttons()
+        )
+        return STEP_REG_PHONE
+
+    context.user_data["reg_phone"] = phone
+
+    # Пересилка адміну
+    name = context.user_data["reg_name"]
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"Нова реєстрація:\n👤 Ім'я: {name}\n📞 Телефон: {phone}"
+    )
+
+    # Запис у БД
+    with sqlite3.connect(DB_NAME) as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS registrations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                name TEXT,
+                phone TEXT,
+                status TEXT DEFAULT 'pending',
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute(
+            "INSERT INTO registrations (user_id, name, phone) VALUES (?, ?, ?)",
+            (update.effective_user.id, name, phone)
+        )
+        conn.commit()
+
+    await update.message.reply_text(
+        "Дякуємо! Чекайте код підтвердження. Введіть 4-значний код:",
+        reply_markup=nav_buttons()
+    )
+    return STEP_REG_CODE
+
+async def register_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    code = update.message.text.strip()
+    if not re.fullmatch(r"\d{4}", code):
+        await update.message.reply_text(
+            "Невірний код. Введіть, будь ласка, 4 цифри:",
+            reply_markup=nav_buttons()
+        )
+        return STEP_REG_CODE
+
+    # Пересилка адміну коду
+    name = context.user_data["reg_name"]
+    user = update.effective_user
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"Код підтвердження від {name} ({user.id}): {code}"
+    )
+
+    # Від клієнта — кнопка “Поповнити”
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💰 Поповнити", callback_data="deposit")],
+        [InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
+    ])
+    await update.message.reply_text(
+        "Реєстрацію успішно надіслано!",
+        reply_markup=keyboard
+    )
+    return STEP_MENU
+
         fallbacks=[CommandHandler("start", start)]
     )
     application.add_handler(conv)
