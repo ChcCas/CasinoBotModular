@@ -278,29 +278,39 @@ async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE)
     payment = context.user_data.get("payment")
     file_msg: Message = context.user_data.get("file")
 
-    caption = f"Заявка від клієнта:\nКартка: {card}\nПровайдер: {provider}\nМетод оплати: {payment}"
-  await context.bot.copy_message(
-    chat_id=ADMIN_ID,
-    from_chat_id=file_msg.chat_id,
-    message_id=file_msg.message_id,
-    caption=text
-)
+    caption = (
+        f"Заявка від клієнта:\n"
+        f"Картка: {card}\n"
+        f"Провайдер: {provider}\n"
+        f"Метод оплати: {payment}"
+    )
 
+    # — Ось цей рядок з copy_to замініть на:
+    await file_msg.copy(
+        chat_id=ADMIN_ID,
+        caption=caption
+    )
+    # — або, якщо у вас старіша версія PTB:
+    # await context.bot.copy_message(
+    #     chat_id=ADMIN_ID,
+    #     from_chat_id=file_msg.chat.id,
+    #     message_id=file_msg.message_id,
+    #     caption=caption
+    # )
 
+    # Далі — ваш запис у БД:
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS deposits (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                username TEXT,
-                card TEXT,
-                provider TEXT,
-                payment TEXT,
-                file_type TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+        cur.execute("""CREATE TABLE IF NOT EXISTS deposits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            username TEXT,
+            card TEXT,
+            provider TEXT,
+            payment TEXT,
+            file_type TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )""")
         cur.execute(
             "INSERT INTO deposits (user_id, username, card, provider, payment, file_type) VALUES (?, ?, ?, ?, ?, ?)",
             (user.id, user.username or "", card, provider, payment,
@@ -308,8 +318,13 @@ async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         conn.commit()
 
-    await query.message.reply_text("Дякуємо! Вашу заявку надіслано.", reply_markup=nav_buttons())
+    # І відповідаємо клієнту:
+    await query.message.reply_text(
+        "Дякуємо! Вашу заявку надіслано.",
+        reply_markup=nav_buttons()
+    )
     return STEP_MENU
+
 
 
 # ——— Флоу «Реєстрація» ——————————————————————
