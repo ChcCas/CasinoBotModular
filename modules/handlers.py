@@ -111,7 +111,7 @@ def nav_buttons():
 
 # ——— Хендлери “Назад” ——————————————————————————————————
 async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return STEP_MENU
+    return await start(update, context)
 
 async def back_to_client_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -273,6 +273,10 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query; await query.answer()
     cmd = query.data
 
+    # обробка «Назад» і «Головне меню»
+    if cmd in ("back_admin", "home"):
+        return await start(update, context)
+
     if cmd == "admin_history_reg":
         with sqlite3.connect(DB_NAME) as conn:
             rows = conn.execute(
@@ -335,9 +339,6 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
               [InlineKeyboardButton("🏠 Головне меню", callback_data="home")]]
         await query.message.edit_text("🔍 Введіть user_id або username для пошуку:", reply_markup=InlineKeyboardMarkup(kb))
         return STEP_ADMIN_SEARCH
-
-    if cmd == "back_admin":
-        return await menu_handler(update, context)
 
     return STEP_ADMIN_PANEL
 
@@ -469,7 +470,7 @@ async def process_crypto_choice(update: Update, context: ContextTypes.DEFAULT_TY
     if choice == "Trustee Plus":
         await query.message.reply_text(
             "🔗 Переказуйте USDT на Trustee Plus\nID: bgm001\n\n"
-            "Надішліть підтвердження (фото/документ/відео).",
+            "Надішліть підтверження (фото/документ/відео).",
             reply_markup=nav_buttons()
         )
         return STEP_CONFIRM_FILE
@@ -609,7 +610,7 @@ async def withdraw_ack(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=ADMIN_ID,
         text=f"✔️ @{user.username or user.id} підтвердив отримання коштів."
     )
-    await query.message.edit_text("✅ Дякую за підтвердження!", reply_markup=nav_buttons())
+    await query.message.edit_text("✅ Дякуємо за підтвердження!", reply_markup=nav_buttons())
     return STEP_MENU
 
 # ——— Флоу “Реєстрація” ——————————————————————————————————
@@ -878,4 +879,4 @@ def setup_handlers(application: Application):
     application.add_handler(
         MessageHandler(filters.TEXT & filters.User(ADMIN_ID) & filters.REPLY, admin_reply),
         group=1
-    )
+                                     )
