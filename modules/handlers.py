@@ -252,13 +252,7 @@ async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(text, reply_markup=nav_buttons())
     else:
         # Криптопереказ залишаємо стандарт
-        await query.message.reply_text(
-            "Завантажте файл підтвердження переказу (фото/документ/відео):",
-            reply_markup=nav_buttons()
-        )
-
-    return STEP_CONFIRM_FILE
-
+       
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["file"] = update.message
     kb = [
