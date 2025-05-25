@@ -533,4 +533,4 @@ text = (
     f"📥 Реквізити: <code>{html.escape(dest)}</code>\n"  
     f"⏰ {ts}"  
 )  
-await context.bot.send_message(chat_id=ADMIN_
+await context.bot.se
