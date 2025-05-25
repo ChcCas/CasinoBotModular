@@ -577,5 +577,4 @@ def get_conv_handler():
             STEP_HELP_CONFIRM: [CallbackQueryHandler(help_confirm)],
         },
         fallbacks=[CommandHandler("start", start)],
-        allow_reentry=True
-    )
+        allow_reentry=True)
