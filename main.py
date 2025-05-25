@@ -2,9 +2,9 @@ import os
 from telegram.ext import Application
 from modules.handlers import setup_handlers
 
-TOKEN       = os.environ["TOKEN"]
-PORT        = int(os.environ.get("PORT", "8443"))
-WEBHOOK_URL = os.environ["WEBHOOK_URL"]  # наприклад: https://casinobotmodular.onrender.com/webhook
+TOKEN = os.environ["TOKEN"]
+PORT = int(os.environ.get("PORT", "8443"))
+WEBHOOK_URL = os.environ["WEBHOOK_URL"]
 
 def main():
     app = Application.builder().token(TOKEN).build()
