@@ -481,4 +481,5 @@ async def withdraw_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💰 Введіть суму виведення (мінімум 200):", reply_markup=build_nav())
     return STEP_WITHDRAW_AMOUNT
 
-asyn
+async def my_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # …
