@@ -1,21 +1,24 @@
-
-import os
+import logging
 from telegram.ext import Application
-from modules.handlers import setup_handlers
 
-# 1) Змінні оточення (Render автоматично задає PORT)
-TOKEN       = os.environ["TOKEN"]
-PORT        = int(os.environ.get("PORT", "8443"))
-WEBHOOK_URL = os.environ["WEBHOOK_URL"]  # наприклад: https://casinobotmodular.onrender.com/webhook
+from modules.constants import TOKEN
+# НЕ імпортуємо setup_handlers зверху!
 
 def main():
-    # 2) Створюємо екземпляр бота
+    # налаштовуємо логування
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s %(levelname)s %(message)s")
+
     app = Application.builder().token(TOKEN).build()
 
-    # 3) Підключаємо всі handler-и з modules/handlers.py
+    # lazy import, щоб config та constants уже були завантажені
+    from modules.handlers import setup_handlers
     setup_handlers(app)
 
-    # 4) Запускаємо webhook-сервер + Telegram-клієнт в одному asyncio-циклі
+    # запускаємо webhook
+    PORT        = int(__import__("os").environ.get("PORT", "8443"))
+    WEBHOOK_URL = __import__("os").environ["WEBHOOK_URL"]
+
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
