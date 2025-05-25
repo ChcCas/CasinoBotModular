@@ -382,8 +382,6 @@ async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=nav_buttons()
         )
         return STEP_CONFIRM_FILE
-    crypto
-# --- сценарій крипто ---
     crypto_kb = [
         [InlineKeyboardButton("Trustee Plus", callback_data="Trustee Plus")],
         [InlineKeyboardButton("Telegram Wallet", callback_data="Telegram Wallet")],
@@ -504,23 +502,19 @@ async def withdraw_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📥 Реквізити: <code>{html.escape(dest)}</code>\n"
         f"⏰ {ts}"
     )
-    # Надіслати адміну (для спрощення в чат адміну):
-    await context.bot.send_message(chat_id=ADMIN_ID, text=text, parse_mode="HTML")
+    await context.bot.send_message(
+        chat_id=ADMIN_ID, text=text, parse_mode="HTML"
+    )
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute(
             "INSERT INTO withdrawals(user_id,username,amount,method,details,source_code) VALUES (?,?,?,?,?,?)",
             (user.id, user.username or "", amount, method, dest, code)
         )
         conn.commit()
-    await query.message.edit_text("✅ Заявка на виведення відправлена!", reply_markup=nav_buttons())
+    await query.message.edit_text("✅ Ваша заявка на виведення надіслана.", reply_markup=nav_buttons())
     return STEP_MENU
 
-# === Фallback для неочікуваних ситуацій ===
-async def fallback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❗ Не впізнав дію. Скористайтеся меню!", reply_markup=nav_buttons())
-    return STEP_MENU
-
-# === Збір усіх хендлерів у ConversationHandler ===
+# === Handler-setup ===
 def get_conv_handler():
     return ConversationHandler(
         entry_points=[CommandHandler("start", start)],
@@ -533,9 +527,7 @@ def get_conv_handler():
             STEP_PROVIDER: [CallbackQueryHandler(process_provider)],
             STEP_PAYMENT: [CallbackQueryHandler(process_payment)],
             STEP_CRYPTO_TYPE: [CallbackQueryHandler(process_crypto_choice)],
-            STEP_CONFIRM_FILE: [
-                MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO, process_file)
-            ],
+            STEP_CONFIRM_FILE: [MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO, process_file)],
             STEP_CONFIRMATION: [CallbackQueryHandler(confirm_submission)],
             STEP_WITHDRAW_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_code)],
             STEP_WITHDRAW_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_amount)],
@@ -548,14 +540,7 @@ def get_conv_handler():
             STEP_HELP_CREATE: [CallbackQueryHandler(help_create)],
             STEP_HELP_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, help_text)],
             STEP_HELP_CONFIRM: [CallbackQueryHandler(help_confirm)],
-            # Додаємо fallback
         },
-        fallbacks=[MessageHandler(filters.ALL, fallback)],
+        fallbacks=[CommandHandler("start", start)],
         allow_reentry=True
     )
-
-# === Готово! ===
-
-# В main.py додай:
-# from handlers import get_conv_handler
-# app.add_handler(get_conv_handler())
