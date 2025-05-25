@@ -1,7 +1,6 @@
 import os
 from telegram.ext import Application
 from modules.handlers import setup_handlers
-
 # 1) Змінні оточення (Render автоматично задає PORT)
 TOKEN       = os.environ["TOKEN"]
 PORT        = int(os.environ.get("PORT", "8443"))
