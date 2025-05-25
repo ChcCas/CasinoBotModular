@@ -1,7 +1,7 @@
 import logging
 from telegram.ext import Application
 
-from modules.constants import TOKEN
+from modules.constants import TOKEN, ADMIN_ID, DB_NAME
 # НЕ імпортуємо setup_handlers зверху!
 
 def main():
