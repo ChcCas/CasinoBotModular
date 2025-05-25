@@ -1,6 +1,2 @@
-import os
-
-TOKEN = os.getenv("TOKEN")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
-DB_NAME = "casino_bot.db"
+ADMIN_ID = 123456789  # заміни на свій ID
+DB_NAME = "bot.db"
