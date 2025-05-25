@@ -1,4 +1,39 @@
-import re
+def get_conv_handler():
+    return ConversationHandler(
+        entry_points=[CommandHandler("start", start)],
+        states={
+            STEP_MENU: [CallbackQueryHandler(menu_handler)],
+            STEP_ADMIN_PANEL: [CallbackQueryHandler(admin_panel_handler)],
+            STEP_DEPOSIT_SCENARIO: [CallbackQueryHandler(deposit_choice_handler)],
+            STEP_CLIENT_SCENARIO: [CallbackQueryHandler(menu_handler)],
+            STEP_CLIENT_CARD: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_card)],
+            STEP_PROVIDER: [CallbackQueryHandler(process_provider)],
+            STEP_PAYMENT: [CallbackQueryHandler(process_payment)],
+            STEP_CRYPTO_TYPE: [CallbackQueryHandler(process_crypto_choice)],
+            STEP_CONFIRM_FILE: [MessageHandler(filters.PHOTO | filters.DOCUMENT | filters.VIDEO, process_file)],
+            STEP_CONFIRMATION: [CallbackQueryHandler(confirm_submission)],
+            STEP_WITHDRAW_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_code)],
+            STEP_WITHDRAW_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_amount)],
+            # ... додай всі свої кроки!
+            STEP_HELP_CHOICE: [CallbackQueryHandler(help_choice)],
+            STEP_HELP_CREATE: [CallbackQueryHandler(help_create)],
+            STEP_HELP_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, help_text)],
+            STEP_HELP_CONFIRM: [CallbackQueryHandler(help_confirm)],
+            STEP_REG_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_name)],
+            STEP_REG_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_phone)],
+            STEP_REG_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, reg_code)],
+            # ...інші стани, якщо треба
+        },
+        fallbacks=[
+            CommandHandler("start", start),
+            CallbackQueryHandler(menu_handler, pattern="home"),
+            CallbackQueryHandler(menu_handler, pattern="back"),
+        ],
+        allow_reentry=True,
+    )
+
+def setup_handlers(app):
+    app.add_handler(get_conv_handler())import re
 import html
 import sqlite3
 from datetime import datetime
