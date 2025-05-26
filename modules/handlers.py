@@ -15,7 +15,7 @@ from modules.config import ADMIN_ID, DB_NAME
 
 # ——— Константи ———————————————————————————————
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GIF_PATH = os.path.join(BASE_DIR, "welcome.gif")  # Переконайтеся, що файл є
+GIF_PATH = os.path.join(BASE_DIR, "welcome.gif")  # Переконайтеся, що файл існує
 
 PROVIDERS = ["🏆 CHAMPION", "🎰 SUPEROMATIC"]
 PAYMENTS  = ["Карта", "Криптопереказ"]
@@ -68,12 +68,10 @@ def setup_handlers(app):
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            # Головне меню
-            STEP_MENU: [
-                CallbackQueryHandler(menu_handler)
-            ],
+            # головне меню
+            STEP_MENU: [CallbackQueryHandler(menu_handler)],
 
-            # Клієнтське підменю
+            # підменю клієнта
             STEP_CLIENT_MENU: [
                 CallbackQueryHandler(client_menu_handler,
                                      pattern="^(client_profile|client_find_card)$"),
@@ -81,7 +79,7 @@ def setup_handlers(app):
                                      pattern="^(deposit|withdraw|register|help|home|back)$"),
             ],
 
-            # Сценарій “Мій профіль”
+            # "Мій профіль"
             STEP_PROFILE_ENTER_CARD:  [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_card)
             ],
@@ -92,17 +90,17 @@ def setup_handlers(app):
                 MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_code)
             ],
 
-            # Запит карти за телефоном
+            # "Дізнатися картку"
             STEP_FIND_CARD_PHONE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, profile_find_phone)
             ],
 
-            # Меню авторизованого клієнта
+            # меню авторизованого клієнта
             STEP_CLIENT_AUTH: [
                 CallbackQueryHandler(authorized_menu_handler)
             ],
 
-            # Депозит
+            # депозит
             STEP_CLIENT_CARD:    [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, process_card)
             ],
@@ -116,13 +114,13 @@ def setup_handlers(app):
                 MessageHandler(filters.TEXT & ~filters.COMMAND, process_deposit_amount)
             ],
             STEP_CONFIRM_FILE:   [
-                MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO, process_file)
+                MessageHandler(filters.Document.ALL|filters.PHOTO|filters.VIDEO, process_file)
             ],
             STEP_CONFIRMATION:   [
                 CallbackQueryHandler(confirm_submission)
             ],
 
-            # Виведення
+            # виведення
             STEP_WITHDRAW_AMOUNT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, process_withdraw_amount)
             ],
@@ -136,7 +134,7 @@ def setup_handlers(app):
                 CallbackQueryHandler(confirm_withdrawal, pattern="^confirm_withdraw$")
             ],
 
-            # Реєстрація
+            # реєстрація
             STEP_REG_NAME:  [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, register_name)
             ],
@@ -151,7 +149,7 @@ def setup_handlers(app):
     )
     app.add_handler(conv)
 
-    # Адмін reply-хендлер
+    # адмін reply
     app.add_handler(
         MessageHandler(filters.TEXT & filters.User(ADMIN_ID) & filters.REPLY,
                        admin_reply),
@@ -169,14 +167,14 @@ def nav_buttons():
 # ——— Меню авторизованого клієнта ——————————————————
 async def show_authorized_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
-        [InlineKeyboardButton("🎁 Зняти кешбек", callback_data="cashback")],
-        [InlineKeyboardButton("💰 Поповнити",    callback_data="deposit")],
-        [InlineKeyboardButton("💸 Вивід коштів", callback_data="withdraw")],
-        [InlineKeyboardButton("📖 Історія",      callback_data="history")],
-        [InlineKeyboardButton("ℹ️ Допомога",     callback_data="help")],
-        [InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
+        [InlineKeyboardButton("🎁 Зняти кешбек",   callback_data="cashback")],
+        [InlineKeyboardButton("💰 Поповнити",      callback_data="deposit")],
+        [InlineKeyboardButton("💸 Вивід коштів",   callback_data="withdraw")],
+        [InlineKeyboardButton("📖 Історія",        callback_data="history")],
+        [InlineKeyboardButton("🔒 Вийти з профілю", callback_data="logout")],
+        [InlineKeyboardButton("ℹ️ Допомога",       callback_data="help")],
     ]
-    text = "Що бажаєте зробити?"
+    text = "Вітаємо в особистому профілі!"
     if update.callback_query:
         await update.callback_query.message.edit_text(text,
             reply_markup=InlineKeyboardMarkup(kb))
@@ -187,30 +185,39 @@ async def show_authorized_menu(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def authorized_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query; await query.answer()
-    data = query.data
+    q    = update.callback_query; await q.answer()
+    data = q.data
+    user_id = q.from_user.id
 
     if data == "cashback":
-        await query.message.reply_text("Сценарій зняття кешбеку тут…")
+        await q.message.reply_text("Сценарій зняття кешбеку тут…")
         return STEP_CLIENT_AUTH
     if data == "deposit":
         return await menu_handler(update, context)
     if data == "withdraw":
         return await menu_handler(update, context)
     if data == "history":
-        await query.message.reply_text("Тут буде історія операцій…")
+        await q.message.reply_text("Тут буде історія операцій…")
         return STEP_CLIENT_AUTH
+    if data == "logout":
+        with sqlite3.connect(DB_NAME) as conn:
+            conn.execute(
+                "UPDATE clients SET authorized=0 WHERE user_id=?", (user_id,)
+            )
+            conn.commit()
+        await q.message.reply_text("Ви вийшли з профілю.", reply_markup=nav_buttons())
+        return await start(update, context)
     if data == "help":
-        await query.message.reply_text("Тут буде довідка…")
+        await q.message.reply_text("Тут буде довідка…")
         return STEP_CLIENT_AUTH
     if data in ("home", "back"):
         return await start(update, context)
 
-    await query.message.reply_text("Ще в розробці…")
+    await q.message.reply_text("Ще в розробці…")
     return STEP_CLIENT_AUTH
 
 
-# ——— /start ——————————————————————————————
+# ——— Команда /start ——————————————————————————————
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
         [InlineKeyboardButton("🎲 КЛІЄНТ",      callback_data="client")],
@@ -226,13 +233,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if update.message:
         with open(GIF_PATH, "rb") as gif:
-            await update.message.reply_animation(gif, caption=caption,
-                parse_mode=ParseMode.MARKDOWN, reply_markup=markup)
+            await update.message.reply_animation(
+                gif, caption=caption,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=markup
+            )
     else:
         await update.callback_query.answer()
         with open(GIF_PATH, "rb") as gif:
-            await update.callback_query.message.reply_animation(gif, caption=caption,
-                parse_mode=ParseMode.MARKDOWN, reply_markup=markup)
+            await update.callback_query.message.reply_animation(
+                gif, caption=caption,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=markup
+            )
     return STEP_MENU
 
 
@@ -255,37 +268,38 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "client":
         return await client_menu_handler(update, context)
-
     if data == "deposit":
-        await q.message.reply_text("Введіть номер картки (4–5 цифр):",
-            reply_markup=nav_buttons())
+        await q.message.reply_text("Введіть номер картки:", reply_markup=nav_buttons())
         return STEP_CLIENT_CARD
-
     if data == "withdraw":
-        await q.message.reply_text("Введіть суму виведення:",
-            reply_markup=nav_buttons())
+        await q.message.reply_text("Введіть суму виведення:", reply_markup=nav_buttons())
         return STEP_WITHDRAW_AMOUNT
-
     if data == "register":
-        await q.message.reply_text("Введіть ім'я чи нік:",
-            reply_markup=nav_buttons())
+        await q.message.reply_text("Введіть ім'я чи нік:", reply_markup=nav_buttons())
         return STEP_REG_NAME
-
     if data == "help":
         await q.message.reply_text("📖 *Довідка*\n• /start — меню\n• 🎲 Клієнт — ваш профіль\n…",
             parse_mode=ParseMode.MARKDOWN, reply_markup=nav_buttons())
         return STEP_MENU
-
-    if data in ("back", "home"):
+    if data in ("back","home"):
         return await start(update, context)
 
-    # тут підключіть admin_deposits, admin_users, etc.
+    # тут додавайте admin_deposits, admin_users, etc.
     return STEP_MENU
 
 
 # ——— Підменю “Клієнт” ——————————————————————————————
 async def client_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query; await q.answer()
+
+    # якщо вже авторизований — показуємо меню авторизованого
+    with sqlite3.connect(DB_NAME) as conn:
+        auth = conn.execute(
+            "SELECT authorized FROM clients WHERE user_id=?", (q.from_user.id,)
+        ).fetchone()
+    if auth and auth[0] == 1 and q.data == "client":
+        return await show_authorized_menu(update, context)
+
     try: await q.message.delete()
     except: pass
 
@@ -301,14 +315,11 @@ async def client_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     data = q.data
     if data == "client_profile":
-        await q.message.reply_text("Введіть номер картки (4–7 цифр):",
-            reply_markup=nav_buttons())
+        await q.message.reply_text("Введіть номер картки:", reply_markup=nav_buttons())
         context.user_data["profile_mode"] = "direct"
         return STEP_PROFILE_ENTER_CARD
-
     if data == "client_find_card":
-        await q.message.reply_text("Введіть телефон (10 цифр):",
-            reply_markup=nav_buttons())
+        await q.message.reply_text("Введіть телефон:", reply_markup=nav_buttons())
         context.user_data["profile_mode"] = "find"
         return STEP_PROFILE_ENTER_PHONE
 
@@ -317,14 +328,12 @@ async def client_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 # ——— “Мій профіль” — прямий ввід картки —————————————————
 async def profile_enter_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    t = update.message.text.strip()
-    if not re.fullmatch(r"\d{4,7}", t):
-        await update.message.reply_text("4–7 цифр, будь ласка.", reply_markup=nav_buttons())
+    card = update.message.text.strip()
+    if not re.fullmatch(r"\d{4,7}", card):
+        await update.message.reply_text("Невірний формат картки.", reply_markup=nav_buttons())
         return STEP_PROFILE_ENTER_CARD
-
-    context.user_data["profile_card"] = t
-    await update.message.reply_text("Тепер введіть телефон (10 цифр):",
-        reply_markup=nav_buttons())
+    context.user_data["profile_card"] = card
+    await update.message.reply_text("Тепер введіть телефон:", reply_markup=nav_buttons())
     return STEP_PROFILE_ENTER_PHONE
 
 
@@ -332,7 +341,7 @@ async def profile_enter_card(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def profile_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     phone = update.message.text.strip()
     if not re.fullmatch(r"\d{10}", phone):
-        await update.message.reply_text("10 цифр, будь ласка.", reply_markup=nav_buttons())
+        await update.message.reply_text("Невірний формат телефону.", reply_markup=nav_buttons())
         return STEP_PROFILE_ENTER_PHONE
 
     mode    = context.user_data["profile_mode"]
@@ -348,7 +357,7 @@ async def profile_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE
                 (user_id, phone, card)
             )
             conn.commit()
-        await update.message.reply_text("Авторизовано ✅", reply_markup=nav_buttons())
+        await update.message.reply_text("Авторизація успішна ✅", reply_markup=nav_buttons())
         return await show_authorized_menu(update, context)
 
     # режим “find”
@@ -360,8 +369,7 @@ async def profile_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE
         conn.commit()
     await context.bot.send_message(ADMIN_ID,
         f"Хоче дізнатися свій номер картки\nТелефон:{phone}")
-    await update.message.reply_text("Введіть 4-значний код із SMS:",
-        reply_markup=nav_buttons())
+    await update.message.reply_text("Введіть код з SMS:", reply_markup=nav_buttons())
     return STEP_PROFILE_ENTER_CODE
 
 
@@ -369,7 +377,7 @@ async def profile_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def profile_enter_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code = update.message.text.strip()
     if not re.fullmatch(r"\d{4}", code):
-        await update.message.reply_text("4 цифри, будь ласка.", reply_markup=nav_buttons())
+        await update.message.reply_text("Невірний код.", reply_markup=nav_buttons())
         return STEP_PROFILE_ENTER_CODE
 
     user_id = update.effective_user.id
@@ -381,7 +389,7 @@ async def profile_enter_code(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         conn.commit()
 
-    await update.message.reply_text("Код відправлено адміну. Чекайте…", reply_markup=nav_buttons())
+    await update.message.reply_text("Код відправлено адміністратору. Чекайте…", reply_markup=nav_buttons())
     return STEP_CLIENT_MENU
 
 
@@ -389,7 +397,7 @@ async def profile_enter_code(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def profile_find_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     phone = update.message.text.strip()
     if not re.fullmatch(r"\d{10}", phone):
-        await update.message.reply_text("10 цифр, будь ласка.", reply_markup=nav_buttons())
+        await update.message.reply_text("Невірний формат телефону.", reply_markup=nav_buttons())
         return STEP_FIND_CARD_PHONE
 
     await context.bot.send_message(ADMIN_ID,
@@ -400,14 +408,13 @@ async def profile_find_phone(update: Update, context: ContextTypes.DEFAULT_TYPE)
             (update.effective_user.id, phone)
         )
         conn.commit()
-    await update.message.reply_text("Введіть 4-значний код із SMS:",
-        reply_markup=nav_buttons())
+    await update.message.reply_text("Введіть код з SMS:", reply_markup=nav_buttons())
     return STEP_PROFILE_ENTER_CODE
 
 
 # ——— Адмін reply ——————————————————————————————
 async def admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    orig  = update.message.reply_to_message.message_id
+    orig = update.message.reply_to_message.message_id
     with sqlite3.connect(DB_NAME) as conn:
         row = conn.execute(
             "SELECT user_id FROM threads WHERE admin_msg_id=?", (orig,)
@@ -415,35 +422,35 @@ async def admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not row:
         await update.message.reply_text("Ланцюг не знайдено.")
         return
-    user_id = row[0]
+    uid = row[0]
 
-    # Якщо клієнт не авторизований → оновлюємо картку
+    # якщо клієнт не авторизований → оновлюємо картку
     with sqlite3.connect(DB_NAME) as conn:
         auth = conn.execute(
-            "SELECT authorized FROM clients WHERE user_id=?", (user_id,)
+            "SELECT authorized FROM clients WHERE user_id=?", (uid,)
         ).fetchone()
     if auth and auth[0] == 0:
         card = update.message.text.strip()
         with sqlite3.connect(DB_NAME) as conn:
             conn.execute(
                 "UPDATE clients SET card=?,authorized=1 WHERE user_id=?",
-                (card, user_id)
+                (card, uid)
             )
             conn.commit()
-        await context.bot.send_message(user_id,
+        await context.bot.send_message(uid,
             f"Ваш номер картки: {card}\nАвторизація успішна ✅")
         return
 
-    # Інакше – звичайний reply
-    await context.bot.send_message(user_id, update.message.text)
+    # інакше – звичайний reply
+    await context.bot.send_message(uid, update.message.text)
     await update.message.reply_text("✅ Доставлено.")
 
 
-# ——— Флоу депозиту —————————————————————————————
+# ——— Флоу депозиту ——————————————————————————————
 async def process_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     if not re.fullmatch(r"\d{4,5}", text):
-        await update.message.reply_text("4–5 цифр.", reply_markup=nav_buttons())
+        await update.message.reply_text("Невірний формат картки.", reply_markup=nav_buttons())
         return STEP_CLIENT_CARD
     context.user_data["card"] = text
     kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS]
@@ -568,7 +575,7 @@ async def process_withdraw_method(update: Update, context: ContextTypes.DEFAULT_
 async def process_withdraw_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
     details = update.message.text.strip()
     context.user_data["withdraw_details"] = details
-    amt = context.user_data["withdraw_amount"]
+    amt    = context.user_data["withdraw_amount"]
     method = context.user_data["withdraw_method"]
     text = f"Підтвердити виведення?\nСума: {amt}\nМетод: {method}\nРеквізити: {details}"
     kb = InlineKeyboardMarkup([
@@ -613,16 +620,16 @@ async def confirm_withdrawal(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return STEP_CLIENT_MENU
 
 
-# ——— Флоу реєстрації —————————————————————————————
+# ——— Флоу реєстрації ——————————————————————————————
 async def register_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["reg_name"] = update.message.text.strip()
-    await update.message.reply_text("Введіть телефон (0XXXXXXXXX):", reply_markup=nav_buttons())
+    await update.message.reply_text("Введіть телефон:", reply_markup=nav_buttons())
     return STEP_REG_PHONE
 
 async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     phone = update.message.text.strip()
-    if not re.fullmatch(r"0\d{9}", phone):
-        await update.message.reply_text("Невірний телефон.", reply_markup=nav_buttons())
+    if not re.fullmatch(r"\d{10}", phone):
+        await update.message.reply_text("Невірний формат телефону.", reply_markup=nav_buttons())
         return STEP_REG_PHONE
     name = context.user_data["reg_name"]
     user_id = update.effective_user.id
@@ -645,7 +652,7 @@ async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         conn.commit()
 
-    await update.message.reply_text("Введіть 4-значний код із SMS:", reply_markup=nav_buttons())
+    await update.message.reply_text("Введіть код з SMS:", reply_markup=nav_buttons())
     return STEP_REG_CODE
 
 async def register_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -667,7 +674,7 @@ async def register_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         conn.commit()
 
-    await update.message.reply_text("Код відправлено адміну. Чекайте підтвердження.", reply_markup=nav_buttons())
+    await update.message.reply_text("Код відправлено адміністратору. Чекайте…", reply_markup=nav_buttons())
     return STEP_MENU
 
 
@@ -681,25 +688,23 @@ async def admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not row:
         await update.message.reply_text("Ланцюг не знайдено.")
         return
-    user_id = row[0]
+    uid = row[0]
 
-    # Якщо клієнт не авторизований → це картка профілю
     with sqlite3.connect(DB_NAME) as conn:
         auth = conn.execute(
-            "SELECT authorized FROM clients WHERE user_id=?", (user_id,)
+            "SELECT authorized FROM clients WHERE user_id=?", (uid,)
         ).fetchone()
     if auth and auth[0] == 0:
         card = update.message.text.strip()
         with sqlite3.connect(DB_NAME) as conn:
             conn.execute(
                 "UPDATE clients SET card=?,authorized=1 WHERE user_id=?",
-                (card, user_id)
+                (card, uid)
             )
             conn.commit()
-        await context.bot.send_message(user_id,
+        await context.bot.send_message(uid,
             f"Ваш номер картки: {card}\nАвторизація успішна ✅")
         return
 
-    # Інакше – звичайний reply
-    await context.bot.send_message(user_id, update.message.text)
+    await context.bot.send_message(uid, update.message.text)
     await update.message.reply_text("✅ Доставлено.")
