@@ -28,7 +28,11 @@ GIF_PATH = os.path.join(BASE_DIR, "welcome.gif")  # Переконайтеся, 
     STEP_REG_NAME,
     STEP_REG_PHONE,
     STEP_REG_CODE,
-) = range(9)
+    STEP_WITHDRAW_AMOUNT,
+    STEP_WITHDRAW_METHOD,
+    STEP_WITHDRAW_DETAILS,
+    STEP_WITHDRAW_CONFIRM,
+) = range(13)
 
 PROVIDERS = ["🏆 CHAMPION", "🎰 SUPEROMATIC"]
 PAYMENTS = ["Карта", "Криптопереказ"]
@@ -65,6 +69,24 @@ def setup_handlers(application):
                 MessageHandler(filters.TEXT & ~filters.COMMAND, register_code),
                 CallbackQueryHandler(menu_handler, pattern="^(back|home)$"),
             ],
+
+            # Флоу “Виведення”
+            STEP_WITHDRAW_AMOUNT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, process_withdraw_amount),
+                CallbackQueryHandler(menu_handler, pattern="^(back|home)$"),
+            ],
+            STEP_WITHDRAW_METHOD: [
+                CallbackQueryHandler(process_withdraw_method),
+                CallbackQueryHandler(menu_handler, pattern="^(back|home)$"),
+            ],
+            STEP_WITHDRAW_DETAILS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, process_withdraw_details),
+                CallbackQueryHandler(menu_handler, pattern="^(back|home)$"),
+            ],
+            STEP_WITHDRAW_CONFIRM: [
+                CallbackQueryHandler(confirm_withdrawal, pattern="^confirm_withdraw$"),
+                CallbackQueryHandler(menu_handler, pattern="^(back|home)$"),
+            ],
         },
         fallbacks=[CommandHandler("start", start)],
     )
@@ -88,7 +110,6 @@ def nav_buttons():
 
 # ——— /start з GIF-привітанням ————————————————————
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Формуємо клавіатуру
     keyboard = [
         [InlineKeyboardButton("🎲 КЛІЄНТ", callback_data="client")],
         [InlineKeyboardButton("📝 Реєстрація", callback_data="register")],
@@ -97,15 +118,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("ℹ️ Допомога", callback_data="help")],
     ]
     if update.effective_user.id == ADMIN_ID:
-        keyboard.append([InlineKeyboardButton("🛠 Адмін-панель", callback_data="admin_panel")])
+        keyboard.append(
+            [InlineKeyboardButton("🛠 Адмін-панель", callback_data="admin_panel")]
+        )
     markup = InlineKeyboardMarkup(keyboard)
 
-    caption = (
-        "*BIG GAME MONEY*\n\n"
-        "Вітаємо у *BIG GAME MONEY*! Оберіть дію:"
-    )
+    caption = "Вітаємо у BIG GAME MONEY! Оберіть дію:"
 
-    # Відправляємо GIF-анімацію з клавіатурою
     if update.message:
         with open(GIF_PATH, "rb") as gif:
             await update.message.reply_animation(
@@ -133,7 +152,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     is_admin = query.from_user.id == ADMIN_ID
 
-    # Для звичайного користувача видаляємо попереднє меню
+    # Звичайному користувачу видаляємо попереднє меню
     if not is_admin:
         try:
             await query.message.delete()
@@ -142,7 +161,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    # — Адмін-панель —
+    # Адмін-панель
     if data == "admin_panel":
         kb = [
             [InlineKeyboardButton("💰 Усі поповнення", callback_data="admin_deposits")],
@@ -154,36 +173,47 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("Панель адміністратора:", reply_markup=InlineKeyboardMarkup(kb))
         return STEP_MENU
 
-    # — КЛІЄНТ —
+    # КЛІЄНТ
     if data == "client":
-        await query.message.reply_text("Введіть номер картки клієнта клубу:", reply_markup=nav_buttons())
+        await query.message.reply_text(
+            "Введіть номер картки клієнта клубу:", reply_markup=nav_buttons()
+        )
         return STEP_CLIENT_CARD
 
-    # — Реєстрація —
+    # Реєстрація
     if data == "register":
         await query.message.reply_text("Введіть ім’я або нікнейм:", reply_markup=nav_buttons())
         return STEP_REG_NAME
 
-    # — Поповнити —
+    # Поповнити
     if data == "deposit":
-        await query.message.reply_text("Введіть номер картки клієнта клубу:", reply_markup=nav_buttons())
+        await query.message.reply_text(
+            "Введіть номер картки клієнта клубу:", reply_markup=nav_buttons()
+        )
         return STEP_CLIENT_CARD
 
-    # — Виведення —
+    # Виведення
     if data == "withdraw":
-        await query.message.reply_text("Флоу виведення ще в розробці.", reply_markup=nav_buttons())
-        return STEP_MENU
+        await query.message.reply_text("Введіть суму для виведення:", reply_markup=nav_buttons())
+        return STEP_WITHDRAW_AMOUNT
 
-    # — Допомога —
+    # Допомога
     if data == "help":
-        await query.message.reply_text("Тут має бути інструкція. Невдовзі реалізуємо!", reply_markup=nav_buttons())
+        await query.message.reply_text(
+            "💡 Інструкція:\n"
+            "• 🎲 «КЛІЄНТ» – перегляд балансу (у розробці)\n"
+            "• 💰 «Поповнити» – поповнення рахунку\n"
+            "• 💸 «Вивід коштів» – зняття коштів\n"
+            "• 📝 «Реєстрація» – створити акаунт\n",
+            reply_markup=nav_buttons(),
+        )
         return STEP_MENU
 
-    # — Назад / Головне меню —
+    # Назад / Головне меню
     if data in ("back", "home"):
         return await start(update, context)
 
-    # — Інші адмін-запити —
+    # Адмін-запити
     if data == "admin_deposits":
         with sqlite3.connect(DB_NAME) as conn:
             rows = conn.execute(
@@ -217,7 +247,20 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return STEP_MENU
 
     if data == "admin_withdrawals":
-        await query.message.reply_text("Останні заявки на виведення …")
+        with sqlite3.connect(DB_NAME) as conn:
+            rows = conn.execute(
+                "SELECT username, amount, method, details, source_code, timestamp FROM withdrawals "
+                "ORDER BY id DESC LIMIT 10"
+            ).fetchall()
+        text = (
+            "Заявок немає."
+            if not rows
+            else "\n\n".join(
+                f"👤 {r[0] or '—'}\n💸 Сума: {r[1]}\nМетод: {r[2]}\n📥 {r[3]}\n🔢 {r[4]}\n🕒 {r[5]}"
+                for r in rows
+            )
+        )
+        await query.message.reply_text(f"Останні заявки на виведення:\n\n{text}")
         return STEP_MENU
 
     if data == "admin_stats":
@@ -226,7 +269,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             deps = conn.execute("SELECT COUNT(*) FROM deposits").fetchone()[0]
             wds = conn.execute("SELECT COUNT(*) FROM withdrawals").fetchone()[0]
         await query.message.reply_text(
-            f"📊 Статистика:\n👤 Користувачів: {users}\n💰 Поповлень: {deps}\n📄 Виведень: {wds}"
+            f"📊 Статистика:\n👤 Користувачів: {users}\n💰 Поповнень: {deps}\n📄 Виведень: {wds}"
         )
         return STEP_MENU
 
@@ -239,7 +282,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def process_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     card = update.message.text.strip()
     if not re.fullmatch(r"\d{4,5}", card):
-        await update.message.reply_text("Невірний формат. Введіть коректний номер картки.", reply_markup=nav_buttons())
+        await update.message.reply_text("Невірний формат. Введіть 4–5 цифр.", reply_markup=nav_buttons())
         return STEP_CLIENT_CARD
 
     context.user_data["card"] = card
@@ -254,8 +297,7 @@ async def process_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_PROVIDER
 
 async def process_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    query = update.callback_query; await query.answer()
     if query.data in ("back", "home"):
         return await menu_handler(update, context)
 
@@ -271,13 +313,12 @@ async def process_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_PAYMENT
 
 async def process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    query = update.callback_query; await query.answer()
     if query.data in ("back", "home"):
         return await menu_handler(update, context)
 
     context.user_data["payment"] = query.data
-    await query.message.reply_text("Завантажте файл підтвердження (фото/документ/відео):", reply_markup=nav_buttons())
+    await query.message.reply_text("Завантажте підтвердження (документ/фото/відео):", reply_markup=nav_buttons())
     return STEP_CONFIRM_FILE
 
 async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -289,42 +330,31 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🏠 Головне меню", callback_data="home"),
         ],
     ]
-    await update.message.reply_text("Натисніть для підтвердження надсилання:", reply_markup=InlineKeyboardMarkup(kb))
+    await update.message.reply_text("Натисніть для підтвердження:", reply_markup=InlineKeyboardMarkup(kb))
     return STEP_CONFIRMATION
 
 async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+    query = update.callback_query; await query.answer()
     user = update.effective_user
     card = context.user_data.get("card")
     provider = context.user_data.get("provider")
     payment = context.user_data.get("payment")
     file_msg: Message = context.user_data.get("file")
 
-    caption = (
-        f"Заявка від клієнта:\n"
-        f"Картка: {card}\n"
-        f"Провайдер: {provider}\n"
-        f"Метод оплати: {payment}"
-    )
+    caption = f"Заявка від клієнта:\nКартка: {card}\nПровайдер: {provider}\nМетод: {payment}"
 
-    # Таблиця для маппінгу admin_msg → user
     with sqlite3.connect(DB_NAME) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS threads (
                 admin_msg_id INTEGER PRIMARY KEY,
-                user_id       INTEGER,
-                user_msg_id   INTEGER
+                user_id INTEGER,
+                user_msg_id INTEGER
             )
-            """
-        )
+        """)
         conn.commit()
 
-    # Копіюємо файл адміну
     admin_msg = await file_msg.copy(chat_id=ADMIN_ID, caption=caption)
 
-    # Записуємо маппінг
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute(
             "INSERT OR REPLACE INTO threads(admin_msg_id, user_id, user_msg_id) VALUES (?, ?, ?)",
@@ -332,10 +362,8 @@ async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         conn.commit()
 
-    # Зберігаємо депозит
     with sqlite3.connect(DB_NAME) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS deposits (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -346,8 +374,7 @@ async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 file_type TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
+        """)
         conn.execute(
             "INSERT INTO deposits(user_id, username, card, provider, payment, file_type) VALUES (?, ?, ?, ?, ?, ?)",
             (
@@ -362,6 +389,93 @@ async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE)
         conn.commit()
 
     await query.message.reply_text("Дякуємо! Вашу заявку надіслано.", reply_markup=nav_buttons())
+    return STEP_MENU
+
+
+# ——— Флоу “Виведення” —————————————————————————————
+async def process_withdraw_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    amount = update.message.text.strip()
+    if not re.fullmatch(r"\d+(\.\d{1,2})?", amount):
+        await update.message.reply_text("Невірний формат суми. Введіть число.", reply_markup=nav_buttons())
+        return STEP_WITHDRAW_AMOUNT
+
+    context.user_data["withdraw_amount"] = amount
+    keyboard = [[InlineKeyboardButton(m, callback_data=m)] for m in PAYMENTS]
+    keyboard.append(
+        [
+            InlineKeyboardButton("◀️ Назад", callback_data="back"),
+            InlineKeyboardButton("🏠 Головне меню", callback_data="home"),
+        ]
+    )
+    await update.message.reply_text("Оберіть метод виведення:", reply_markup=InlineKeyboardMarkup(keyboard))
+    return STEP_WITHDRAW_METHOD
+
+async def process_withdraw_method(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query; await query.answer()
+    method = query.data
+    context.user_data["withdraw_method"] = method
+    await query.message.reply_text("Введіть реквізити для виведення:", reply_markup=nav_buttons())
+    return STEP_WITHDRAW_DETAILS
+
+async def process_withdraw_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    details = update.message.text.strip()
+    context.user_data["withdraw_details"] = details
+    text = (
+        f"Підтверджуєте виведення?\n"
+        f"💸 Сума: {context.user_data['withdraw_amount']}\n"
+        f"💳 Метод: {context.user_data['withdraw_method']}\n"
+        f"📥 Реквізити: {details}"
+    )
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Підтвердити", callback_data="confirm_withdraw")],
+        [InlineKeyboardButton("◀️ Назад", callback_data="back"),
+         InlineKeyboardButton("🏠 Головне меню", callback_data="home")]
+    ])
+    await update.message.reply_text(text, reply_markup=kb)
+    return STEP_WITHDRAW_CONFIRM
+
+async def confirm_withdrawal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query; await query.answer()
+    user = query.from_user
+    amt = context.user_data.get("withdraw_amount")
+    method = context.user_data.get("withdraw_method")
+    details = context.user_data.get("withdraw_details")
+
+    text = (
+        f"Заявка на виведення:\n"
+        f"Сума: {amt}\n"
+        f"Метод: {method}\n"
+        f"Реквізити: {details}"
+    )
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS withdrawals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                username TEXT,
+                amount TEXT,
+                method TEXT,
+                details TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+
+    admin_msg = await context.bot.send_message(chat_id=ADMIN_ID, text=text)
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute(
+            "INSERT INTO withdrawals(user_id, username, amount, method, details) VALUES (?, ?, ?, ?, ?)",
+            (user.id, user.username or "", amt, method, details),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO threads(admin_msg_id, user_id, user_msg_id) VALUES (?, ?, ?)",
+            (admin_msg.message_id, user.id, 0),
+        )
+        conn.commit()
+
+    await query.message.reply_text("Ваша заявка на виведення надіслана адміну.", reply_markup=nav_buttons())
     return STEP_MENU
 
 
@@ -380,12 +494,10 @@ async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["reg_phone"] = phone
     name = context.user_data["reg_name"]
 
-    # Пересилка адміну
     await context.bot.send_message(chat_id=ADMIN_ID, text=f"Нова реєстрація:\n👤 Ім’я: {name}\n📞 Телефон: {phone}")
 
     with sqlite3.connect(DB_NAME) as conn:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS registrations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -394,8 +506,7 @@ async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 status TEXT DEFAULT 'pending',
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
-            """
-        )
+        """)
         conn.execute("INSERT INTO registrations(user_id, name, phone) VALUES (?, ?, ?)", (update.effective_user.id, name, phone))
         conn.commit()
 
