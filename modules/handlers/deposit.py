@@ -6,7 +6,7 @@ from telegram.ext import CallbackQueryHandler, MessageHandler, filters, ContextT
 from modules.config import ADMIN_ID, DB_NAME
 
 # Подтянем функцию get_user из вашего db.py (в корне проекта)
-from db import get_user
+from modules.db import get_user
 
 from states import (
     STEP_PROVIDER,
