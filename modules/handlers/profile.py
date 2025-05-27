@@ -10,7 +10,7 @@ from telegram.ext import (
     filters,
 )
 
-from db import get_user, save_user
+from modules.db import get_user, save_user
 from keyboards import nav_buttons, admin_panel_kb  # якщо потрібна адмінка
 from keyboards import nav_buttons, main_menu
 from states import (
