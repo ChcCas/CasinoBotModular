@@ -12,7 +12,7 @@ def nav_buttons():
 
 def main_menu(is_admin=False):
     kb = [
-        [InlineKeyboardButton("🎲 КЛІЄНТ",    callback_data="client")],
+        [InlineKeyboardButton("🎲 КЛІЄНТ",    callback_data="client_profile")],
         [InlineKeyboardButton("📝 Реєстрація", callback_data="register")],
         [InlineKeyboardButton("💰 Поповнити",  callback_data="deposit")],
         [InlineKeyboardButton("💸 Вивід коштів",callback_data="withdraw")],
