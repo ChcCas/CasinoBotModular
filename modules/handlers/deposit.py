@@ -5,14 +5,16 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from modules.config import ADMIN_ID, DB_NAME
 
-# ← вот тут поправка:
-from db import get_user             # если get_user в корне, в db.py  
-# from modules.db import get_user    # если вы действительно положили его в modules/db.py
+# Подтянем функцию get_user из вашего db.py (в корне проекта)
+from db import get_user
 
 from states import (
-    STEP_PROVIDER, STEP_PAYMENT, STEP_DEPOSIT_AMOUNT,
-    STEP_GUEST_DEPOSIT_FILE, STEP_GUEST_DEPOSIT_CONFIRM,
-    STEP_MENU
+    STEP_PROVIDER,
+    STEP_PAYMENT,
+    STEP_DEPOSIT_AMOUNT,
+    STEP_GUEST_DEPOSIT_FILE,
+    STEP_GUEST_DEPOSIT_CONFIRM,
+    STEP_MENU,
 )
 
 def register_deposit_handlers(app):
@@ -24,21 +26,18 @@ def register_deposit_handlers(app):
     app.add_handler(CallbackQueryHandler(deposit_with_card_start, pattern="^deposit_with_card$"), group=1)
     # 4) Выбор провайдера
     app.add_handler(
-        CallbackQueryHandler(deposit_process_provider,
-                             pattern="^(🏆 CHAMPION|🎰 SUPEROMATIC)$"),
+        CallbackQueryHandler(deposit_process_provider, pattern="^(🏆 CHAMPION|🎰 SUPEROMATIC)$"),
         group=2
     )
     # 5) Выбор типа оплаты
     app.add_handler(
-        CallbackQueryHandler(deposit_process_payment,
-                             pattern="^(Карта|Криптопереказ)$"),
+        CallbackQueryHandler(deposit_process_payment, pattern="^(Карта|Криптопереказ)$"),
         group=3
     )
     # 6) Ввод суммы
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, deposit_process_amount), group=4)
     # 7) Гость загружает файл
-    app.add_handler(MessageHandler(filters.Document.ALL|filters.PHOTO|filters.VIDEO,
-                                  guest_deposit_file), group=5)
+    app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO, guest_deposit_file), group=5)
     # 8) Подтверждение гостевой заявки
     app.add_handler(CallbackQueryHandler(guest_deposit_confirm, pattern="^confirm_guest$"), group=6)
 
@@ -49,9 +48,12 @@ async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = get_user(update.effective_user.id)
 
     buttons = []
-    if user:
+    # Если в БД есть карта — предложить пополнение с картой
+    if user and user[1]:
         buttons.append([InlineKeyboardButton("💳 Поповнити з картою", callback_data="deposit_with_card")])
+    # Всем гостям
     buttons.append([InlineKeyboardButton("🎮 Поповнити без карти", callback_data="guest_deposit")])
+    # Навигация
     buttons.append([
         InlineKeyboardButton("◀️ Назад", callback_data="back"),
         InlineKeyboardButton("🏠 Головне меню", callback_data="home"),
@@ -67,13 +69,13 @@ async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def deposit_with_card_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Авторизованный пользователь: сначала провайдер."""
     await update.callback_query.answer()
-    buttons = [
-        [InlineKeyboardButton(p, callback_data=p)] for p in ["🏆 CHAMPION", "🎰 SUPEROMATIC"]
-    ]
+
+    buttons = [[InlineKeyboardButton(p, callback_data=p)] for p in ["🏆 CHAMPION", "🎰 SUPEROMATIC"]]
     buttons.append([
         InlineKeyboardButton("◀️ Назад", callback_data="back"),
         InlineKeyboardButton("🏠 Головне меню", callback_data="home"),
     ])
+
     await update.callback_query.message.reply_text(
         "Оберіть провайдера:",
         reply_markup=InlineKeyboardMarkup(buttons)
@@ -82,17 +84,16 @@ async def deposit_with_card_start(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def deposit_process_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Сохраняем выбор провайдера."""
-    context.user_data["provider"] = update.callback_query.data
+    """Сохраняем выбор провайдера и спрашиваем способ оплаты."""
     await update.callback_query.answer()
+    context.user_data["provider"] = update.callback_query.data
 
-    buttons = [
-        [InlineKeyboardButton(p, callback_data=p)] for p in ["Карта", "Криптопереказ"]
-    ]
+    buttons = [[InlineKeyboardButton(p, callback_data=p)] for p in ["Карта", "Криптопереказ"]]
     buttons.append([
         InlineKeyboardButton("◀️ Назад", callback_data="back"),
         InlineKeyboardButton("🏠 Головне меню", callback_data="home"),
     ])
+
     await update.callback_query.message.reply_text(
         "Оберіть спосіб оплати:",
         reply_markup=InlineKeyboardMarkup(buttons)
@@ -102,8 +103,8 @@ async def deposit_process_provider(update: Update, context: ContextTypes.DEFAULT
 
 async def deposit_process_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сохраняем выбор оплаты и просим ввести сумму."""
-    context.user_data["payment"] = update.callback_query.data
     await update.callback_query.answer()
+    context.user_data["payment"] = update.callback_query.data
 
     buttons = [
         [InlineKeyboardButton("◀️ Назад", callback_data="back")],
@@ -119,6 +120,7 @@ async def deposit_process_payment(update: Update, context: ContextTypes.DEFAULT_
 async def deposit_process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Проверяем сумму и шлём админу заявку."""
     text = update.message.text.strip()
+    # только положительные целые
     if not text.isdigit() or int(text) <= 0:
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("◀️ Назад", callback_data="back")],
@@ -127,12 +129,12 @@ async def deposit_process_amount(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text("Невірна сума.", reply_markup=kb)
         return STEP_DEPOSIT_AMOUNT
 
-    amount = text
-    user = get_user(update.effective_user.id)
-    card = user[1] if user else "Н/Д"
+    amount   = int(text)
+    user     = get_user(update.effective_user.id)
+    card     = user[1] if user and user[1] else "Н/Д"
     provider = context.user_data["provider"]
-    payment = context.user_data["payment"]
-    ts = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
+    payment  = context.user_data["payment"]
+    ts       = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
 
     msg = (
         f"🆕 Поповнення від {update.effective_user.full_name} ({update.effective_user.id}):\n"
@@ -153,7 +155,7 @@ async def deposit_process_amount(update: Update, context: ContextTypes.DEFAULT_T
 
 
 async def guest_deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Поток гостя: загружаем файл."""
+    """Гость (без карты): предлагаем загрузить файл."""
     await update.callback_query.answer()
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("◀️ Назад", callback_data="back")],
@@ -167,7 +169,7 @@ async def guest_deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def guest_deposit_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Сохраняем файл и предлагаем подтвердить."""
+    """Сохраняем сообщение с файлом и предлагаем подтвердить отправку."""
     context.user_data["guest_file"] = update.message
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ Надіслати", callback_data="confirm_guest")]])
     await update.message.reply_text(
@@ -179,15 +181,17 @@ async def guest_deposit_file(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def guest_deposit_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Отправляем файл админу с подписью."""
-    user = update.effective_user
-    file_msg = context.user_data["guest_file"]
-    ts = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
+    await update.callback_query.answer()
+    user     = update.effective_user
+    file_msg = context.user_data.get("guest_file")
+    ts       = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
 
     caption = (
-        f"🎮 Гість ({user.full_name},{user.id}) поповнює без карти\n"
+        f"🎮 Гість ({user.full_name}, {user.id}) поповнює без карти\n"
         f"Картка: Ставити на нашу\n"
         f"🕒 {ts}"
     )
+    # пересылаем файл
     await file_msg.copy_to(ADMIN_ID, caption=caption)
 
     kb = InlineKeyboardMarkup([
