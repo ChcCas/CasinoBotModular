@@ -7,7 +7,7 @@ from telegram.ext import CallbackQueryHandler, MessageHandler, filters, ContextT
 from modules.config import ADMIN_ID, DB_NAME
 from keyboards     import nav_buttons, client_menu
 from states        import (
-    STEP_PROFILE,               # <-- додали кому
+
     STEP_MENU,
     STEP_CLIENT_MENU,
     STEP_PROFILE_ENTER_CARD,
