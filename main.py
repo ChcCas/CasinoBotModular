@@ -13,13 +13,13 @@ from modules.handlers.admin        import register_admin_handlers
 from modules.handlers.navigation   import register_navigation_handlers  # ← новий імпорт
 
 def main():
-    # 1. Инициализируем базу (создадим все нужные таблицы)
-    init_db()
+    # 1. Ініціалізуємо базу (створимо всі потрібні таблиці)
+    init_db(DB_NAME)
 
-    # 2. Создаём экземпляр бота
+    # 2. Створюємо екземпляр бота
     app = Application.builder().token(TOKEN).build()
 
-    # 3. Регистрируем по-модульно все группы хендлеров
+    # 3. Регіструємо по-модульно всі групи хендлерів
     register_start_handler(app)
     register_profile_handlers(app)
     register_deposit_handlers(app)
@@ -30,11 +30,11 @@ def main():
     # 4. Навігація «Назад» і «Головне меню»
     register_navigation_handlers(app)
 
-    # 5. Запускаем webhook-сервер
+    # 5. Запускаємо webhook-сервер
     app.run_webhook(
         listen="0.0.0.0",
-        port=PORT,           # из modules/config.py
-        url_path="/webhook", # PTB v22+ требует url_path
+        port=PORT,           # із modules/config.py
+        url_path="/webhook", # PTB v22+ вимагає url_path
         webhook_url=WEBHOOK_URL
     )
 
