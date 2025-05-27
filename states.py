@@ -1,33 +1,42 @@
 # states.py
 
 (
-    STEP_MENU,
-    STEP_CLIENT_MENU,
-    STEP_PROFILE_ENTER_CARD,
-    STEP_PROFILE_ENTER_PHONE,
-    STEP_PROFILE_ENTER_CODE,
-    STEP_FIND_CARD_PHONE,
-    STEP_CLIENT_AUTH,
-    # нові стани для поповнення:
-    STEP_GUEST_DEPOSIT,          # кнопка "Грати без карти"
-    STEP_GUEST_DEPOSIT_PROVIDER, # вибір провайдера для гостя
-    STEP_GUEST_DEPOSIT_PAYMENT,  # вибір способу оплати для гостя
-    STEP_GUEST_DEPOSIT_AMOUNT,   # введення суми гостем
-    STEP_GUEST_DEPOSIT_CONFIRM,  # підтвердження файлу/суми гостем
-    STEP_GUEST_DEPOSIT_CODE,     # введення коду sms гостем
-    # далі ваші вже існуючі:
-    STEP_PROVIDER,
-    STEP_PAYMENT,
-    STEP_DEPOSIT_AMOUNT,
-    STEP_CONFIRM_FILE,
-    STEP_CONFIRMATION,
-    STEP_WITHDRAW_AMOUNT,
-    STEP_WITHDRAW_METHOD,
-    STEP_WITHDRAW_DETAILS,
-    STEP_WITHDRAW_CONFIRM,
-    STEP_REG_NAME,
-    STEP_REG_PHONE,
-    STEP_REG_CODE,
-    STEP_ADMIN_BROADCAST,
-    STEP_ADMIN_SEARCH,
-) = range(28)
+    STEP_MENU,                    # 0
+    STEP_CLIENT_MENU,             # 1
+    STEP_PROFILE_ENTER_CARD,      # 2
+    STEP_PROFILE_ENTER_PHONE,     # 3
+    STEP_PROFILE_ENTER_CODE,      # 4
+    STEP_FIND_CARD_PHONE,         # 5
+    STEP_CLIENT_AUTH,             # 6
+
+    # Новые станы для "guest deposit"
+    STEP_GUEST_DEPOSIT,           # 7   – "Грати без карти"
+    STEP_GUEST_DEPOSIT_PROVIDER,  # 8
+    STEP_GUEST_DEPOSIT_PAYMENT,   # 9
+    STEP_GUEST_DEPOSIT_AMOUNT,    # 10
+    STEP_GUEST_DEPOSIT_CONFIRM,   # 11
+    STEP_GUEST_DEPOSIT_CODE,      # 12
+
+    # Обычные депозит/вывод–стадии
+    STEP_PROVIDER,                # 13
+    STEP_PAYMENT,                 # 14
+    STEP_DEPOSIT_AMOUNT,          # 15
+    STEP_CONFIRM_FILE,            # 16
+    STEP_CONFIRMATION,            # 17
+
+    STEP_WITHDRAW_AMOUNT,         # 18
+    STEP_WITHDRAW_METHOD,         # 19
+    STEP_WITHDRAW_DETAILS,        # 20
+    STEP_WITHDRAW_CONFIRM,        # 21
+
+    # Регистрация
+    STEP_REG_NAME,                # 22
+    STEP_REG_PHONE,               # 23
+    STEP_REG_CODE,                # 24
+
+    # Админские сценарии
+    STEP_ADMIN_BROADCAST,         # 25
+    STEP_ADMIN_SEARCH,            # 26
+
+    # остаточный
+) = range(27)
