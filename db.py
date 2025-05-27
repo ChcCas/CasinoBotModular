@@ -3,39 +3,43 @@ import sqlite3
 from modules.config import DB_NAME
 
 def init_db():
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS threads (
-                admin_msg_id INTEGER PRIMARY KEY,
-                user_id       INTEGER
-            )""")
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS clients (
-                user_id    INTEGER PRIMARY KEY,
-                phone      TEXT,
-                card       TEXT,
-                authorized INTEGER DEFAULT 0
-            )""")
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS deposits (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER, username TEXT,
-                card TEXT, provider TEXT,
-                payment TEXT, amount REAL,
-                file_type TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )""")
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS withdrawals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER, username TEXT,
-                amount REAL, method TEXT,
-                details TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )""")
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS registrations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER, name TEXT,
-                phone TEXT, status TEXT DEFAULT 'pending',
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )""")
-        conn.commit()
+    """Створює файл БД і всі необхідні таблиці, якщо їх ще немає."""
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+
+    # Таблиця користувачів: для збереження card і phone
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        user_id   INTEGER PRIMARY KEY,
+        card      TEXT    NOT NULL,
+        phone     TEXT    NOT NULL
+    )
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+def get_user(user_id: int):
+    """Повертає (user_id, card, phone) або None."""
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("SELECT user_id, card, phone FROM users WHERE user_id = ?", (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    return row
+
+
+def upsert_user(user_id: int, card: str, phone: str):
+    """Вставляє/оновлює record користувача."""
+    conn = sqlite3.connect(DB_NAME)
+    cur = conn.cursor()
+    cur.execute("""
+    INSERT INTO users(user_id, card, phone)
+    VALUES (?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      card  = excluded.card,
+      phone = excluded.phone
+    """, (user_id, card, phone))
+    conn.commit()
+    conn.close()
