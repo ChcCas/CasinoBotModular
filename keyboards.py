@@ -10,7 +10,7 @@ def nav_buttons():
         [InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
     ])
 
-def main_menu(is_admin=False):
+def main_menu(is_admin: bool = False):
     kb = [
         [InlineKeyboardButton("🎲 КЛІЄНТ",    callback_data="client_profile")],
         [InlineKeyboardButton("📝 Реєстрація", callback_data="register")],
@@ -39,24 +39,26 @@ def payment_buttons():
     return InlineKeyboardMarkup(kb)
 
 def client_menu(authorized: bool):
+    """
+    Якщо користувач авторизований, показує меню з кешбеком, поповненням, виводом тощо.
+    Якщо ні — пропонує авторизуватися через «Мій профіль».
+    """
     if authorized:
-        # Автоматично підставлена картка/телефон, доступні операції
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("🎁 Зняти кешбек", callback_data="cashback")],
-            [InlineKeyboardButton("💰 Поповнити",    callback_data="deposit")],
+            [InlineKeyboardButton("💰 Поповнити",     callback_data="deposit")],
             [InlineKeyboardButton("💸 Вивід",         callback_data="withdraw")],
             [InlineKeyboardButton("📖 Історія",       callback_data="history")],
             [InlineKeyboardButton("🔒 Вийти",         callback_data="logout")],
             [InlineKeyboardButton("ℹ️ Допомога",      callback_data="help")],
         ])
     else:
-        # Якщо ще не авторизований
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton("💳 Мій профіль",        callback_data="client_profile")],
-            [InlineKeyboardButton("📇 Дізнатися картку",   callback_data="client_find_card")],
-            [InlineKeyboardButton("💰 Поповнити",          callback_data="deposit")],
-            [InlineKeyboardButton("💸 Вивід коштів",        callback_data="withdraw")],
-            [InlineKeyboardButton("🏠 Головне меню",       callback_data="home")],
+            [InlineKeyboardButton("💳 Мій профіль",      callback_data="client_profile")],
+            [InlineKeyboardButton("📇 Дізнатися картку", callback_data="client_find_card")],
+            [InlineKeyboardButton("💰 Поповнити",        callback_data="deposit")],
+            [InlineKeyboardButton("💸 Вивід коштів",      callback_data="withdraw")],
+            [InlineKeyboardButton("🏠 Головне меню",     callback_data="home")],
         ])
 
 def admin_panel_kb():
