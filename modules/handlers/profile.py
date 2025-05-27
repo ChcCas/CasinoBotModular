@@ -1,3 +1,5 @@
+# modules/handlers/profile.py
+
 import re
 from telegram import Update
 from telegram.ext import (
@@ -8,9 +10,10 @@ from telegram.ext import (
     filters,
 )
 
-from modules.db       import get_user, save_user
-from keyboards        import nav_buttons, main_menu
-from states           import (
+from db import get_user, save_user
+from keyboards import nav_buttons, admin_panel_kb  # якщо потрібна адмінка
+from keyboards import nav_buttons, main_menu
+from states import (
     STEP_MENU,
     STEP_PROFILE_ENTER_CARD,
     STEP_PROFILE_ENTER_PHONE,
@@ -19,10 +22,11 @@ from states           import (
 async def start_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     user = get_user(update.effective_user.id)
+
     if user:
         await update.callback_query.message.reply_text(
             "Ви вже авторизовані 👇",
-            reply_markup=main_menu(is_admin=False),
+            reply_markup=main_menu(is_admin=False, is_auth=True),
         )
         return STEP_MENU
 
@@ -60,7 +64,7 @@ async def profile_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE
     save_user(update.effective_user.id, context.user_data["card"], phone)
     await update.message.reply_text(
         "✅ Авторизація успішна!",
-        reply_markup=main_menu(is_admin=False),
+        reply_markup=main_menu(is_admin=False, is_auth=True),
     )
     return STEP_MENU
 
@@ -68,13 +72,9 @@ def register_profile_handlers(app):
     conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(start_profile, pattern="^client_profile$")],
         states={
-            STEP_PROFILE_ENTER_CARD: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_card)
-            ],
-            STEP_PROFILE_ENTER_PHONE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_phone)
-            ],
-            STEP_MENU: [],
+            STEP_PROFILE_ENTER_CARD: [MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_card)],
+            STEP_PROFILE_ENTER_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_phone)],
+            STEP_MENU: [],  # далі інші handlers
         },
         fallbacks=[],
         allow_reentry=True,
