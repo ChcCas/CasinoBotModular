@@ -1,9 +1,12 @@
 # modules/config.py
 import os
+from dotenv import load_dotenv
 
-# Telegram token
-TOKEN    = os.environ["TOKEN"]
-# Ваш Telegram-ID адміністратора
-ADMIN_ID = int(os.environ["ADMIN_ID"])
-# Ім’я файлу бази даних SQLite
-DB_NAME  = os.environ.get("DB_NAME", "bot.db")
+# подгружаем .env из корня проекта
+load_dotenv()
+
+TOKEN       = os.getenv("TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+ADMIN_ID    = int(os.getenv("ADMIN_ID", "0"))
+PORT        = int(os.getenv("PORT", "8443"))
+DB_NAME     = os.getenv("DB_NAME", "bot.db")
