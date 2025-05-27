@@ -1,39 +1,77 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-def nav_buttons() -> InlineKeyboardMarkup:
-    """
-    Універсальні кнопки навігації:
-      ◀️ Назад — повернутися на попередній крок
-      🏠 Головне меню — повернутися на старт
-    """
+PROVIDERS = ["🏆 CHAMPION", "🎰 SUPEROMATIC"]
+PAYMENTS  = ["Карта", "Криптопереказ"]
+
+def nav_buttons():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("◀️ Назад",    callback_data="NAV_BACK")],
-        [InlineKeyboardButton("🏠 Головне меню", callback_data="NAV_HOME")],
+        [InlineKeyboardButton("◀️ Назад", callback_data="back")],
+        [InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
     ])
 
-
-def main_menu(is_admin: bool, is_auth: bool) -> InlineKeyboardMarkup:
-    """
-    Головне меню.
-    
-    - is_auth=False (гість):        Поповнити / Авторизуватися
-    - is_auth=True  (авторизовані): Мій профіль / Поповнити / Вивід коштів
-    - is_admin=True                 + кнопка Адмін-панель
-    """
-    kb = []
-
-    if not is_auth:
-        # Користувач не авторизований
-        kb.append([InlineKeyboardButton("💰 Поповнити",      callback_data="DEPOSIT_START")])
-        kb.append([InlineKeyboardButton("🔐 Авторизуватися", callback_data="PROFILE_START")])
-    else:
-        # Авторизований клієнт
-        kb.append([InlineKeyboardButton("💳 Мій профіль",    callback_data="PROFILE_START")])
-        kb.append([InlineKeyboardButton("💰 Поповнити",      callback_data="DEPOSIT_START")])
-        kb.append([InlineKeyboardButton("💸 Вивід коштів",   callback_data="WITHDRAW_START")])
-
-    if is_admin:
-        # Адміністратор
-        kb.append([InlineKeyboardButton("🛠 Адмін-панель",   callback_data="ADMIN_PANEL")])
-
+def provider_buttons():
+    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS]
+    kb.append([
+        InlineKeyboardButton("◀️ Назад", callback_data="back"),
+        InlineKeyboardButton("🏠 Головне меню", callback_data="home"),
+    ])
     return InlineKeyboardMarkup(kb)
+
+def payment_buttons():
+    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PAYMENTS]
+    kb.append([
+        InlineKeyboardButton("◀️ Назад", callback_data="back"),
+        InlineKeyboardButton("🏠 Головне меню", callback_data="home"),
+    ])
+    return InlineKeyboardMarkup(kb)
+
+def client_menu(is_authorized: bool) -> InlineKeyboardMarkup:
+    if is_authorized:
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎁 Зняти кешбек", callback_data="cashback")],
+            [InlineKeyboardButton("💰 Поповнити", callback_data="deposit")],
+            [InlineKeyboardButton("💸 Вивід", callback_data="WITHDRAW_START")],
+            [InlineKeyboardButton("📖 Історія", callback_data="history")],
+            [InlineKeyboardButton("🔒 Вийти", callback_data="logout")],
+            [InlineKeyboardButton("ℹ️ Допомога", callback_data="help")],
+        ])
+    else:
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("💳 Мій профіль", callback_data="client_profile")],
+            [InlineKeyboardButton("📇 Дізнатися картку", callback_data="client_find_card")],
+            [InlineKeyboardButton("💰 Поповнити", callback_data="deposit")],
+            [InlineKeyboardButton("💸 Вивід коштів", callback_data="WITHDRAW_START")],
+            [InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
+        ])
+
+def main_menu(is_admin: bool) -> InlineKeyboardMarkup:
+    if is_admin:
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("🛠 Адмін-панель", callback_data="admin_panel")],
+            [InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
+        ])
+    else:
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("💳 Мій профіль", callback_data="client_profile")],
+            [InlineKeyboardButton("📇 Дізнатися картку", callback_data="client_find_card")],
+            [InlineKeyboardButton("💰 Поповнити", callback_data="deposit")],
+            [InlineKeyboardButton("💸 Вивід коштів", callback_data="WITHDRAW_START")],
+            [InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
+        ])
+
+def admin_panel_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("💰 Депозити", callback_data="admin_deposits"),
+            InlineKeyboardButton("👤 Користувачі", callback_data="admin_users"),
+        ],
+        [
+            InlineKeyboardButton("📄 Виведення", callback_data="admin_withdrawals"),
+            InlineKeyboardButton("📊 Статистика", callback_data="admin_stats"),
+        ],
+        [
+            InlineKeyboardButton("🔍 Пошук клієнта", callback_data="admin_search"),
+            InlineKeyboardButton("📢 Розсилка", callback_data="admin_broadcast"),
+        ],
+        [InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
+    ])
