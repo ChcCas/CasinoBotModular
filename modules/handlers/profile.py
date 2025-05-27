@@ -15,112 +15,165 @@ from states import (
     STEP_MENU,
     STEP_PROFILE_ENTER_CARD,
     STEP_PROFILE_ENTER_PHONE,
-    STEP_PROFILE_ENTER_CODE,
+    STEP_PROFILE_CASHBACK_REQUEST,
+    STEP_PROFILE_CASHBACK_CODE,
 )
 
-
 def register_profile_handlers(app):
-    # Когда нажали «Мій профіль»
+    # 1) Вхід у профіль — запит карти
     app.add_handler(
         CallbackQueryHandler(_enter_profile, pattern="^client_profile$"),
         group=0,
     )
-    # Ввод номера карты
+    # 2) Обробка введення карти
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_card),
         group=1,
     )
-    # Ввод телефона
+    # 3) Обробка введення телефону
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_phone),
         group=1,
     )
-    # Ввод SMS-кода
+    # 4) Запит кешбеку — надсилаємо адміну і просимо код
     app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_code),
+        CallbackQueryHandler(profile_cashback_request, pattern="^cashback$"),
+        group=1,
+    )
+    # 5) Обробка введення коду кешбеку
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, profile_cashback_code),
         group=1,
     )
 
-
 async def _enter_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик нажатия «Мій профіль»"""
+    """Старт сценарію — запит номера картки."""
     await update.callback_query.answer()
     await update.callback_query.message.reply_text(
-        "Введіть номер вашої картки:", reply_markup=nav_buttons()
+        "Будь ласка, введіть номер вашої картки:",
+        reply_markup=nav_buttons()
     )
     return STEP_PROFILE_ENTER_CARD
 
-
 async def profile_enter_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip()
-    if not re.fullmatch(r"\d{4,7}", text):
+    card = update.message.text.strip()
+    # лише цифри, довжина 4–7
+    if not re.fullmatch(r"\d{4,7}", card):
         await update.message.reply_text(
-            "Невірний формат картки. Спробуйте ще раз.", reply_markup=nav_buttons()
+            "Невірний формат картки. Має бути 4–7 цифр, без пробілів.",
+            reply_markup=nav_buttons()
         )
         return STEP_PROFILE_ENTER_CARD
 
-    # Сохраняем карту и просим телефон
-    context.user_data["profile_card"] = text
+    context.user_data["profile_card"] = card
     await update.message.reply_text(
-        "Введіть номер телефону (10 цифр):", reply_markup=nav_buttons()
+        "Введіть, будь ласка, номер телефону (починається з 0, всього 10 цифр):",
+        reply_markup=nav_buttons()
     )
     return STEP_PROFILE_ENTER_PHONE
 
-
 async def profile_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     phone = update.message.text.strip()
-    if not re.fullmatch(r"\d{10}", phone):
+    # починається з 0 та 9 цифр далі
+    if not re.fullmatch(r"0\d{9}", phone):
         await update.message.reply_text(
-            "Невірний формат телефону. Спробуйте ще раз.", reply_markup=nav_buttons()
+            "Невірний формат телефону. Має бути 10 цифр, починаючи з 0.",
+            reply_markup=nav_buttons()
         )
         return STEP_PROFILE_ENTER_PHONE
 
-    # Сохраняем телефон
-    context.user_data["profile_phone"] = phone
+    card = context.user_data["profile_card"]
+    # Зберігаємо в базу або оновлюємо
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE,
+                card TEXT,
+                phone TEXT,
+                is_authorized INTEGER DEFAULT 0
+            )
+        """)
+        conn.execute("""
+            INSERT INTO users(user_id, card, phone, is_authorized)
+            VALUES (?, ?, ?, 1)
+            ON CONFLICT(user_id) DO UPDATE SET
+              card=excluded.card,
+              phone=excluded.phone,
+              is_authorized=1
+        """, (update.effective_user.id, card, phone))
+        conn.commit()
 
-    # Отправляем админу первую часть заявки и сохраняем её message_id
-    name = update.effective_user.full_name
+    # Авторизуємо в user_data
+    context.user_data["is_authorized"] = True
+
+    # Повідомляємо користувача
+    await update.message.reply_text(
+        "Ви успішно авторизовані! Ось ваш профіль:",
+        reply_markup=client_menu(authorized=True)
+    )
+    return STEP_MENU
+
+async def profile_cashback_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Клієнт натиснув «🎁 Кешбек» — висилаємо адміну заявку."""
+    query = update.callback_query
+    await query.answer()
+
+    # Отримуємо з бази картку
+    with sqlite3.connect(DB_NAME) as conn:
+        row = conn.execute(
+            "SELECT card FROM users WHERE user_id = ?",
+            (update.effective_user.id,)
+        ).fetchone()
+
+    card = row[0] if row else None
+    if not card:
+        await query.message.reply_text(
+            "Спочатку авторизуйтеся через Мій профіль.",
+            reply_markup=nav_buttons()
+        )
+        return STEP_MENU
+
+    # Надсилаємо адміну заявку
     msg = await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=(
-            f"🆕 Клієнт {name} ({update.effective_user.id}) хоче авторизуватися.\n"
-            f"💳 Картка: {context.user_data['profile_card']}\n"
-            f"📞 Телефон: {phone}\n"
-            "Введіть код і відповідайте на це повідомлення."
-        ),
+            f"🚨 Клієнт {update.effective_user.full_name} ({update.effective_user.id})\n"
+            f"хоче зняти кешбек.\n"
+            f"Картка: {card}\n\n"
+            "Будь ласка, відповідайте на це повідомлення кодом."
+        )
     )
-    # Сохраняем message_id, чтобы ответить на него
-    context.bot_data["last_profile_request_id"] = msg.message_id
+    # Зберігаємо message_id для «ланцюжка»
+    context.bot_data["last_cashback_request_id"] = msg.message_id
 
-    await update.message.reply_text(
-        "Код відправлено адміністратору. Введіть 4-значний код:",
-        reply_markup=nav_buttons(),
+    # Питаємо код
+    await query.message.reply_text(
+        "Будь ласка, введіть 4-значний код підтвердження:",
+        reply_markup=nav_buttons()
     )
-    return STEP_PROFILE_ENTER_CODE
+    return STEP_PROFILE_CASHBACK_CODE
 
-
-async def profile_enter_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def profile_cashback_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code = update.message.text.strip()
     if not re.fullmatch(r"\d{4}", code):
         await update.message.reply_text(
-            "Невірний код. Спробуйте ще раз.", reply_markup=nav_buttons()
+            "Невірний код. Має бути 4 цифри.",
+            reply_markup=nav_buttons()
         )
-        return STEP_PROFILE_ENTER_CODE
+        return STEP_PROFILE_CASHBACK_CODE
 
-    # Отправляем админу код как ответ на предыдущую заявку
-    name = update.effective_user.full_name
-    reply_to = context.bot_data.get("last_profile_request_id")
+    # Відповідаємо адміну в ланцюжку
+    reply_to = context.bot_data.get("last_cashback_request_id")
     await context.bot.send_message(
         chat_id=ADMIN_ID,
-        text=f"🔑 SMS-код від {name} ({update.effective_user.id}): {code}",
-        reply_to_message_id=reply_to,
+        text=f"🔑 Код для кешбеку: {code}",
+        reply_to_message_id=reply_to
     )
-    # Очищаем, чтобы новая заявка шла в отдельной цепочке
-    context.bot_data.pop("last_profile_request_id", None)
+    context.bot_data.pop("last_cashback_request_id", None)
 
-    # Возвращаем пользователя в главное меню
     await update.message.reply_text(
-        "Очікуйте підтвердження від адміністратора.",
-        reply_markup=client_menu(authorized=False),
+        "Ваш код відправлено адміністратору. Чекайте підтвердження.",
+        reply_markup=client_menu(authorized=True)
     )
     return STEP_MENU
