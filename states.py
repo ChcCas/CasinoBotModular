@@ -1,3 +1,6 @@
+# src/modules/states.py
+
+# Усі константи станів для ConversationHandler
 (
     STEP_MENU,
     STEP_CLIENT_MENU,
@@ -12,7 +15,7 @@
     STEP_DEPOSIT_AMOUNT,
     STEP_CONFIRM_FILE,
     STEP_CONFIRMATION,
-    STEP_WITHDRAW_START,           # ← Ось доданий
+    STEP_WITHDRAW_START,
     STEP_WITHDRAW_AMOUNT,
     STEP_WITHDRAW_METHOD,
     STEP_WITHDRAW_DETAILS,
