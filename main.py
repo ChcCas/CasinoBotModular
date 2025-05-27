@@ -3,7 +3,7 @@
 import os
 from telegram.ext import Application
 
-from db import init_db
+from modules.db import init_db
 from modules.config import TOKEN, WEBHOOK_URL, PORT, DB_NAME, ADMIN_ID
 from modules.handlers.start        import register_start_handler
 from modules.handlers.profile      import register_profile_handlers
