@@ -4,7 +4,7 @@ import sqlite3, datetime
 from telegram import Update
 from telegram.ext import CallbackQueryHandler, MessageHandler, filters, ContextTypes
 from modules.config import ADMIN_ID, DB_NAME
-from keyboards import deposit_menu, payment_buttons, nav_buttons
+from keyboards import provider_buttons, payment_buttons, nav_buttons
 from states import (
     STEP_PROVIDER, STEP_PAYMENT, STEP_DEPOSIT_AMOUNT,
     STEP_GUEST_DEPOSIT_FILE, STEP_GUEST_DEPOSIT_CONFIRM,
