@@ -11,7 +11,7 @@ from telegram.ext import (
 )
 
 from modules.db import get_user, save_user
-from modules.keyboards import nav_buttons, main_menu
+from keyboards import nav_buttons, main_menu
 from modules.states import (
     STEP_MENU,
     STEP_PROFILE_ENTER_CARD,
