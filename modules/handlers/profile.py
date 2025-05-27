@@ -1,5 +1,3 @@
-# src/modules/handlers/profile.py
-
 import re
 from telegram import Update
 from telegram.ext import (
@@ -10,9 +8,9 @@ from telegram.ext import (
     filters,
 )
 
-from modules.db import get_user, save_user
-from keyboards import nav_buttons, main_menu
-from modules.states import (
+from modules.db       import get_user, save_user
+from keyboards        import nav_buttons, main_menu
+from states           import (
     STEP_MENU,
     STEP_PROFILE_ENTER_CARD,
     STEP_PROFILE_ENTER_PHONE,
@@ -70,9 +68,13 @@ def register_profile_handlers(app):
     conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(start_profile, pattern="^client_profile$")],
         states={
-            STEP_PROFILE_ENTER_CARD: [MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_card)],
-            STEP_PROFILE_ENTER_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_phone)],
-            STEP_MENU: [],  # потім керується вашими іншими хендлерами
+            STEP_PROFILE_ENTER_CARD: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_card)
+            ],
+            STEP_PROFILE_ENTER_PHONE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_phone)
+            ],
+            STEP_MENU: [],
         },
         fallbacks=[],
         allow_reentry=True,
