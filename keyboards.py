@@ -1,47 +1,76 @@
 # keyboards.py
+
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from modules.db import get_user  # для перевірки авторизації
 
 PROVIDERS = ["🏆 CHAMPION", "🎰 SUPEROMATIC"]
 PAYMENTS  = ["Карта", "Криптопереказ"]
 
-def nav_buttons():
+def nav_buttons() -> InlineKeyboardMarkup:
+    """Універсальні кнопки «Назад» і «Головне меню»."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("◀️ Назад", callback_data="back")],
+        [InlineKeyboardButton("◀️ Назад",        callback_data="back")],
         [InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
     ])
 
-def main_menu(is_admin: bool = False):
-    kb = [
-        [InlineKeyboardButton("🎲 КЛІЄНТ",    callback_data="client_profile")],
-        [InlineKeyboardButton("📝 Реєстрація", callback_data="register")],
-        [InlineKeyboardButton("💰 Поповнити",  callback_data="deposit")],
-        [InlineKeyboardButton("💸 Вивід коштів",callback_data="withdraw")],
-        [InlineKeyboardButton("ℹ️ Допомога",   callback_data="help")],
-    ]
-    if is_admin:
-        kb.append([InlineKeyboardButton("🛠 Адмін-панель", callback_data="admin_panel")])
-    return InlineKeyboardMarkup(kb)
-
-def provider_buttons():
-    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS]
-    kb.append([
-        InlineKeyboardButton("◀️ Назад", callback_data="back"),
-        InlineKeyboardButton("🏠 Головне меню", callback_data="home"),
-    ])
-    return InlineKeyboardMarkup(kb)
-
-def payment_buttons():
-    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PAYMENTS]
-    kb.append([
-        InlineKeyboardButton("◀️ Назад", callback_data="back"),
-        InlineKeyboardButton("🏠 Головне меню", callback_data="home"),
-    ])
-    return InlineKeyboardMarkup(kb)
-
-def client_menu(authorized: bool):
+def main_menu(user_id: int, is_admin: bool = False) -> InlineKeyboardMarkup:
     """
-    Якщо користувач авторизований, показує меню з кешбеком, поповненням, виводом тощо.
-    Якщо ні — пропонує авторизуватися через «Мій профіль».
+    Головне меню для користувача або адміністратора.
+    - Адмін бачить лише «Адмін-панель».
+    - Клієнту:
+        • Мій профіль
+        • Реєстрація
+        • Поповнити
+        • Вивід коштів (лише якщо вже авторизований)
+        • Допомога
+    """
+    if is_admin:
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("🛠 Адмін-панель", callback_data="admin_panel")],
+        ])
+
+    kb = [
+        [InlineKeyboardButton("💳 Мій профіль",    callback_data="client_profile")],
+        [InlineKeyboardButton("📝 Реєстрація",     callback_data="register")],
+        [InlineKeyboardButton("💰 Поповнити",      callback_data="deposit")],
+    ]
+
+    # додаємо «Вивід» лише якщо користувач є в БД (тобто авторизований)
+    if get_user(user_id):
+        kb.append([InlineKeyboardButton("💸 Вивід коштів", callback_data="withdraw")])
+
+    kb.append([InlineKeyboardButton("ℹ️ Допомога", callback_data="help")])
+    return InlineKeyboardMarkup(kb)
+
+def deposit_menu(user_id: int) -> InlineKeyboardMarkup:
+    """
+    Підменю «Поповнити»:
+    - Якщо авторизований → вибір провайдера.
+    - Якщо не авторизований → два варіанти:
+        • Грати без карти
+        • Поповнити з карткою (запустить авторизацію)
+    """
+    if get_user(user_id):
+        kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS]
+    else:
+        kb = [
+            [InlineKeyboardButton("🎮 Грати без карти", callback_data="guest_deposit")],
+            [InlineKeyboardButton("💳 Поповнити з карткою", callback_data="deposit_with_card")],
+        ]
+    kb.append([InlineKeyboardButton("◀️ Назад", callback_data="back")])
+    return InlineKeyboardMarkup(kb)
+
+def payment_buttons() -> InlineKeyboardMarkup:
+    """Меню вибору способу оплати + кнопка назад."""
+    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PAYMENTS]
+    kb.append([InlineKeyboardButton("◀️ Назад", callback_data="back")])
+    return InlineKeyboardMarkup(kb)
+
+def client_menu(authorized: bool) -> InlineKeyboardMarkup:
+    """
+    Меню в особистому кабінеті клієнта.
+    - authorized=True → повний набір дій.
+    - False → пропонує авторизуватися.
     """
     if authorized:
         return InlineKeyboardMarkup([
@@ -57,11 +86,11 @@ def client_menu(authorized: bool):
             [InlineKeyboardButton("💳 Мій профіль",      callback_data="client_profile")],
             [InlineKeyboardButton("📇 Дізнатися картку", callback_data="client_find_card")],
             [InlineKeyboardButton("💰 Поповнити",        callback_data="deposit")],
-            [InlineKeyboardButton("💸 Вивід коштів",      callback_data="withdraw")],
             [InlineKeyboardButton("🏠 Головне меню",     callback_data="home")],
         ])
 
-def admin_panel_kb():
+def admin_panel_kb() -> InlineKeyboardMarkup:
+    """Меню адміністратора з усіма функціями + навігація."""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("💰 Депозити",    callback_data="admin_deposits"),
