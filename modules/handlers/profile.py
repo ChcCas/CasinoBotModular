@@ -18,7 +18,7 @@ from states import (
 )
 
 # Если ваш db.py лежит в корне проекта:
-from db import get_user, save_user
+from modules.db import get_user, save_user
 # Если же в modules/db.py, то:
 # from modules.db import get_user, save_user
 
