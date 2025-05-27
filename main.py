@@ -16,7 +16,7 @@ from modules.handlers.navigation   import register_navigation_handlers
 
 def main():
     # 1) Инициализируем базу (создадим все нужные таблицы)
-    init_db(DB_NAME)
+    init_db()
 
     # 2) Создаем экземпляр бота
     app = Application.builder().token(TOKEN).build()
