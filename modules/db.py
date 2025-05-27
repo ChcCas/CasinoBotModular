@@ -1,5 +1,6 @@
 import sqlite3
 from .config import DB_NAME
+from db import get_user, save_user
 
 def init_db():
     with sqlite3.connect(DB_NAME) as conn:
