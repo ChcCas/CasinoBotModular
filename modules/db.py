@@ -1,4 +1,3 @@
-# modules/db.py
 import sqlite3
 from modules.config import DB_NAME
 
@@ -8,8 +7,8 @@ def init_db():
     c.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
-            card TEXT NOT NULL,
-            phone TEXT NOT NULL
+            card    TEXT NOT NULL,
+            phone   TEXT NOT NULL
         );
     """)
     conn.commit()
@@ -31,4 +30,4 @@ def get_user(user_id: int):
     c.execute("SELECT user_id, card, phone FROM users WHERE user_id = ?", (user_id,))
     row = c.fetchone()
     conn.close()
-    return row
+    return row  # None або (user_id, card, phone)
