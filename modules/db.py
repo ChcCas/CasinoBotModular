@@ -1,25 +1,34 @@
+# modules/db.py
 import sqlite3
-from .config import DB_NAME
-from db import get_user, save_user
+from modules.config import DB_NAME
 
 def init_db():
-    with sqlite3.connect(DB_NAME) as conn:
-        cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS registrations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                phone TEXT NOT NULL,
-                status TEXT DEFAULT 'pending'
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                action TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.commit()
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            card TEXT NOT NULL,
+            phone TEXT NOT NULL
+        );
+    """)
+    conn.commit()
+    conn.close()
+
+def save_user(user_id: int, card: str, phone: str):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute(
+        "REPLACE INTO users (user_id, card, phone) VALUES (?, ?, ?)",
+        (user_id, card, phone)
+    )
+    conn.commit()
+    conn.close()
+
+def get_user(user_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    c.execute("SELECT user_id, card, phone FROM users WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row
