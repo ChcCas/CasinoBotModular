@@ -17,7 +17,7 @@ from modules.db import (
     search_user,
     broadcast_message,
 )
-from modules.keyboards import admin_panel_kb, nav_buttons
+from keyboards import admin_panel_kb, nav_buttons
 from modules.states    import (
     STEP_MENU,
     STEP_ADMIN_DEPOSITS,
