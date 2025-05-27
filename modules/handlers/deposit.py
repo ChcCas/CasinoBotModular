@@ -120,7 +120,6 @@ async def deposit_process_payment(update: Update, context: ContextTypes.DEFAULT_
 async def deposit_process_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Проверяем сумму и шлём админу заявку."""
     text = update.message.text.strip()
-    # только положительные целые
     if not text.isdigit() or int(text) <= 0:
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("◀️ Назад", callback_data="back")],
@@ -129,11 +128,13 @@ async def deposit_process_amount(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text("Невірна сума.", reply_markup=kb)
         return STEP_DEPOSIT_AMOUNT
 
-    amount   = int(text)
-    user     = get_user(update.effective_user.id)
-    card     = user[1] if user and user[1] else "Н/Д"
-    provider = context.user_data["provider"]
-    payment  = context.user_data["payment"]
+    amount = text
+    user = get_user(update.effective_user.id)
+    card = user[1] if user else "Н/Д"
+
+    # <<< замість "поставщик" беремо "provider"
+    provider = context.user_data.get("provider", "Н/Д")
+    payment  = context.user_data.get("payment",  "Н/Д")
     ts       = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
 
     msg = (
@@ -152,6 +153,7 @@ async def deposit_process_amount(update: Update, context: ContextTypes.DEFAULT_T
     ])
     await update.message.reply_text("Заявка на поповнення відправлена адміну.", reply_markup=kb)
     return STEP_MENU
+
 
 
 async def guest_deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
