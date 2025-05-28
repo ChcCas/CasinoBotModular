@@ -84,3 +84,10 @@ register_profile_handlers(app)
 
 if __name__ == "__main__":
     app.run_polling()
+    app.run_webhook(
+    listen="0.0.0.0",
+    port=PORT,
+    url_path="/webhook",
+    webhook_url=WEBHOOK_URL,
+    open_browser=False  # ← додаємо цю опцію
+)
