@@ -1,8 +1,6 @@
-# main.py
-
 import os
 import sqlite3
-from telegram.ext import Application
+from telegram.ext import ApplicationBuilder
 from modules.handlers.admin import register_admin_handlers
 from modules.handlers.profile import register_profile_handlers
 from modules.config import TOKEN, WEBHOOK_URL, PORT
@@ -13,8 +11,10 @@ DB_NAME = "bot_data.db"
 with sqlite3.connect(DB_NAME) as conn:
     cursor = conn.cursor()
 
+    # Пересоздання таблиці users
+    cursor.execute("DROP TABLE IF EXISTS users")
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE users (
             user_id INTEGER PRIMARY KEY,
             username TEXT,
             phone TEXT,
@@ -71,18 +71,18 @@ with sqlite3.connect(DB_NAME) as conn:
     conn.commit()
 
 # === Запуск бота ===
-def main():
-    app = Application.builder().token(TOKEN).build()
+app = ApplicationBuilder().token(TOKEN).build()
 
-    register_admin_handlers(app)
-    register_profile_handlers(app)
+# Реєстрація хендлерів
+register_admin_handlers(app)
+register_profile_handlers(app)
 
+# Запуск через webhook
+if __name__ == "__main__":
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         url_path="/webhook",
-        webhook_url=WEBHOOK_URL
+        webhook_url=WEBHOOK_URL,
+        open_browser=False
     )
-
-if __name__ == "__main__":
-    main()
