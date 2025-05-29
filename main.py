@@ -12,10 +12,9 @@ DB_NAME = "bot_data.db"
 with sqlite3.connect(DB_NAME) as conn:
     cursor = conn.cursor()
 
-    # Пересоздання таблиці users
-    cursor.execute("DROP TABLE IF EXISTS users")
+    # Таблиця користувачів (залишаємо тільки CREATE IF NOT EXISTS)
     cursor.execute("""
-        CREATE TABLE users (
+        CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
             username TEXT,
             phone TEXT,
@@ -66,7 +65,7 @@ with sqlite3.connect(DB_NAME) as conn:
         )
     """)
 
-    # Таблиця повідомлень (гілки)
+    # Таблиця гілок повідомлень (thread-механізм)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS threads (
             user_id INTEGER PRIMARY KEY,
@@ -84,7 +83,7 @@ register_start_handler(app)
 register_admin_handlers(app)
 register_profile_handlers(app)
 
-# Запуск через Webhook
+# Webhook-запуск
 if __name__ == "__main__":
     app.run_webhook(
         listen="0.0.0.0",
