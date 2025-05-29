@@ -34,7 +34,8 @@ from modules.states import (
 from .start import start_command
 # … остальные импорты …
 
-from .profile import start_profile, profile_enter_card, profile_enter_phone
+from .profile import start_profile, find_card
+
 from .registration import registration_start, register_name, register_phone, register_code
 from .admin import show_admin_panel, admin_search, admin_broadcast
 
