@@ -1,12 +1,10 @@
-# modules/handlers/registration.py
-
 import re
 import sqlite3
 from telegram import Update
 from telegram.ext import CallbackQueryHandler, MessageHandler, ContextTypes, filters
 from modules.config import ADMIN_ID, DB_NAME
-from keyboards     import nav_buttons
-from states        import STEP_REG_NAME, STEP_REG_PHONE, STEP_REG_CODE, STEP_MENU
+from modules.keyboards import nav_buttons
+from modules.states import STEP_REG_NAME, STEP_REG_PHONE, STEP_REG_CODE, STEP_MENU
 
 async def registration_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -16,10 +14,9 @@ async def registration_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return STEP_REG_NAME
 
 async def register_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    name = update.message.text.strip()
-    context.user_data["reg_name"] = name
+    context.user_data["reg_name"] = update.message.text.strip()
     await update.message.reply_text(
-        "Введіть номер телефону (формат 0XXXXXXXXX):", reply_markup=nav_buttons()
+        "Введіть номер телефону (0XXXXXXXXX):", reply_markup=nav_buttons()
     )
     return STEP_REG_PHONE
 
@@ -32,13 +29,13 @@ async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data["reg_name"]
     context.user_data["reg_phone"] = phone
 
-    # сообщаем админу
+    # надсилаємо адміну
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=f"Нова реєстрація:\nІм'я: {name}\nТелефон: {phone}"
     )
 
-    # сохраняем в БД
+    # зберігаємо в БД
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS registrations (
@@ -68,17 +65,15 @@ async def register_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return STEP_REG_CODE
 
     name = context.user_data["reg_name"]
-    # шлём админу код
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=f"Код підтвердження від {name} ({update.effective_user.id}): {code}"
     )
-
     await update.message.reply_text("Реєстрацію надіслано!", reply_markup=nav_buttons())
     return STEP_MENU
 
 def register_registration_handlers(app):
     app.add_handler(CallbackQueryHandler(registration_start, pattern="^register$"), group=0)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, register_name),   group=1)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, register_phone),  group=1)
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, register_code),   group=1)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, register_name), group=1)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, register_phone), group=1)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, register_code), group=1)
