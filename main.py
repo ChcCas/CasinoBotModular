@@ -12,7 +12,7 @@ DB_NAME = "bot_data.db"
 with sqlite3.connect(DB_NAME) as conn:
     cursor = conn.cursor()
 
-    # Таблиця користувачів (залишаємо тільки CREATE IF NOT EXISTS)
+    # Таблиця користувачів (створюємо лише якщо ще не існує)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
