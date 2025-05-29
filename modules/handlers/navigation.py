@@ -8,18 +8,32 @@ from telegram.ext import (
     CallbackQueryHandler,
     MessageHandler,
     filters,
+    ContextTypes,        # ← вот он
 )
-from modules.config import DB_NAME
+
+from modules.config import ADMIN_ID, DB_NAME
 from modules.keyboards import PROVIDERS, PAYMENTS, nav_buttons, provider_buttons, payment_buttons
 from modules.states import (
     STEP_MENU,
-    STEP_REG_NAME, STEP_REG_PHONE, STEP_REG_CODE,
-    STEP_CLIENT_CARD, STEP_PROVIDER, STEP_PAYMENT,
-    STEP_DEPOSIT_AMOUNT, STEP_CONFIRM_FILE, STEP_CONFIRMATION,
-    STEP_WITHDRAW_AMOUNT, STEP_WITHDRAW_METHOD, STEP_WITHDRAW_DETAILS, STEP_WITHDRAW_CONFIRM,
-    STEP_ADMIN_SEARCH, STEP_ADMIN_BROADCAST,
+    STEP_CLIENT_CARD,
+    STEP_PROVIDER,
+    STEP_PAYMENT,
+    STEP_DEPOSIT_AMOUNT,
+    STEP_CONFIRM_FILE,
+    STEP_CONFIRMATION,
+    STEP_WITHDRAW_AMOUNT,
+    STEP_WITHDRAW_METHOD,
+    STEP_WITHDRAW_DETAILS,
+    STEP_WITHDRAW_CONFIRM,
+    STEP_REG_NAME,
+    STEP_REG_PHONE,
+    STEP_REG_CODE,
+    STEP_ADMIN_SEARCH,
+    STEP_ADMIN_BROADCAST,
 )
 from .start import start_command
+# … остальные импорты …
+
 from .profile import start_profile, profile_enter_card, profile_enter_phone
 from .registration import registration_start, register_name, register_phone, register_code
 from .admin import show_admin_panel, admin_search, admin_broadcast
