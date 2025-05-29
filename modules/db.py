@@ -83,3 +83,19 @@ def save_user(user_id: int, card: str, phone: str):
     """, (user_id, card, phone))
     conn.commit()
     conn.close()
+
+def search_user(query: str):
+    """
+    Шукає користувача за user_id або за номером картки.
+    Повертає кортеж із полями з таблиці users, або None, якщо не знайдено.
+    """
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    # Припустимо, у вас у таблиці users є поля user_id і card
+    cursor.execute(
+        "SELECT * FROM users WHERE user_id = ? OR card = ?",
+        (query, query)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row
