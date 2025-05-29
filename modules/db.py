@@ -1,108 +1,57 @@
 # modules/db.py
 import sqlite3
-from typing import List, Dict, Optional
 from modules.config import DB_NAME
 
-def init_db() -> None:
-    """Створює всі необхідні таблиці, якщо їх ще немає."""
-    with sqlite3.connect(DB_NAME) as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS registrations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER UNIQUE,
-            card TEXT,
-            phone TEXT,
-            status TEXT DEFAULT 'pending',
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )""")
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS deposits (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            username TEXT,
-            card TEXT,
-            provider TEXT,
-            payment TEXT,
-            amount REAL,
-            file_type TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )""")
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS withdrawals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            username TEXT,
-            amount REAL,
-            method TEXT,
-            details TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )""")
-        conn.commit()
+# Відкриваємо коннекшн у глобальній змінній, щоб не створювати новий кожного разу
+conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+cursor = conn.cursor()
 
-def get_user(user_id: int) -> Optional[Dict]:
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    row = conn.cursor().execute(
-        "SELECT user_id, card, phone, status FROM registrations WHERE user_id = ? AND status = 'confirmed'",
-        (user_id,)
-    ).fetchone()
-    conn.close()
-    return dict(row) if row else None
-
-def save_user(user_id: int, card: str, phone: str) -> None:
-    conn = sqlite3.connect(DB_NAME)
-    conn.execute(
-        "INSERT INTO registrations (user_id, card, phone, status) VALUES (?, ?, ?, 'confirmed') "
-        "ON CONFLICT(user_id) DO UPDATE SET card=excluded.card, phone=excluded.phone, status='confirmed'",
-        (user_id, card, phone)
+# 1) Міграція: якщо таблиці users не було – створить; 
+#    якщо колонка card відсутня – додасть
+cursor.execute("PRAGMA table_info(users)")
+cols = [row[1] for row in cursor.fetchall()]
+if not cols:
+    # Таблиці взагалі не існує
+    cursor.execute("""
+    CREATE TABLE users (
+        user_id INTEGER PRIMARY KEY,
+        username TEXT,
+        phone TEXT,
+        card TEXT,
+        is_registered INTEGER DEFAULT 0
     )
-    conn.commit()
-    conn.close()
+    """)
+elif 'card' not in cols:
+    # Таблиця є, але без card
+    cursor.execute("ALTER TABLE users ADD COLUMN card TEXT")
 
-def list_deposits() -> List[Dict]:
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    rows = conn.cursor().execute(
-        "SELECT id, user_id, amount FROM deposits ORDER BY id DESC"
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+conn.commit()
 
-def list_withdrawals() -> List[Dict]:
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    rows = conn.cursor().execute(
-        "SELECT id, user_id, amount, method, details FROM withdrawals ORDER BY id DESC"
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-def list_users() -> List[Dict]:
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    rows = conn.cursor().execute(
-        "SELECT user_id, card, phone FROM registrations WHERE status = 'confirmed' ORDER BY id DESC"
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-def search_user(query: str) -> List[Dict]:
-    term = f"%{query}%"
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    rows = conn.cursor().execute(
-        "SELECT user_id, card, phone FROM registrations "
-        "WHERE (card LIKE ? OR phone LIKE ?) AND status='confirmed'",
-        (term, term)
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
-
-def broadcast_message(text: str) -> int:
-    conn = sqlite3.connect(DB_NAME)
+def get_user(user_id: int) -> dict:
     cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM registrations WHERE status='confirmed'")
-    count = cur.fetchone()[0]
-    conn.close()
-    return count
+    cur.execute("""
+        SELECT user_id, username, phone, card, is_registered
+        FROM users
+        WHERE user_id = ?
+    """, (user_id,))
+    row = cur.fetchone()
+    if not row:
+        # новий юзер — створюємо мінімальний запис
+        cur.execute("INSERT INTO users(user_id) VALUES(?)", (user_id,))
+        conn.commit()
+        return {
+            'user_id': user_id,
+            'username': None,
+            'phone': None,
+            'card': None,
+            'is_registered': 0
+        }
+    return {
+        'user_id':    row[0],
+        'username':   row[1],
+        'phone':      row[2],
+        'card':       row[3],
+        'is_registered': row[4]
+    }
+
+# …інші функції (save_user, update_user тощо) мають працювати з новим полем card
