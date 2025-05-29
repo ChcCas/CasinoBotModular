@@ -1,32 +1,57 @@
-import os
-from telegram import Update
-from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
-from modules.config import ADMIN_ID
-from modules.keyboards import main_menu
-from modules.states import STEP_MENU
+# modules/handlers/start.py
 
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-GIF_PATH = os.path.join(ROOT_DIR, "assets", "welcome.gif")
+import os
+from pathlib import Path
+
+from telegram import Update
+from telegram.ext import CommandHandler, ContextTypes, Application
+
+from keyboards import main_menu
+
+# ─── Визначаємо корінь проєкту так, щоб шукати assets/ на рівні репозиторію
+#
+# Структура:
+# /opt/render/project/
+# ├─ assets/
+# │   └─ welcome.gif
+# └─ src/
+#     └─ modules/
+#         └─ handlers/
+#             └─ start.py
+#
+# Тобто: start.py → handlers → modules → src → project
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+ASSETS_DIR   = PROJECT_ROOT / "assets"
+GIF_PATH     = ASSETS_DIR / "welcome.gif"
+
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message:
-        with open(GIF_PATH, "rb") as gif:
-            await update.message.reply_animation(gif)
-        await update.message.reply_text(
-            "Вітаємо у BIG GAME MONEY! Оберіть дію:",
-            reply_markup=main_menu(is_admin=(update.effective_user.id == ADMIN_ID))
-        )
-    else:
-        query = update.callback_query
-        await query.answer()
-        with open(GIF_PATH, "rb") as gif:
-            await query.message.reply_animation(gif)
-        await query.message.reply_text(
-            "Вітаємо у BIG GAME MONEY! Оберіть дію:",
-            reply_markup=main_menu(is_admin=(query.from_user.id == ADMIN_ID))
-        )
-    return STEP_MENU
+    """
+    Обробник команди /start.
+    Якщо у папці assets є welcome.gif — надсилає його як анімацію.
+    Інакше — просто текстове привітання.
+    """
+    caption = "🎲 Ласкаво просимо до CasinoBot!"
+    kb      = main_menu()
 
-def register_start_handler(app):
-    app.add_handler(CommandHandler("start", start_command), group=0)
-    app.add_handler(CallbackQueryHandler(start_command, pattern="^home$"), group=0)
+    if GIF_PATH.is_file():
+        # Надсилаємо GIF-анімацію, якщо файл знайдено
+        with GIF_PATH.open("rb") as gif:
+            await update.message.reply_animation(
+                gif,
+                caption=caption,
+                reply_markup=kb
+            )
+    else:
+        # Файл відсутній — надсилаємо просте текстове повідомлення
+        await update.message.reply_text(
+            caption,
+            reply_markup=kb
+        )
+
+
+def register_start_handler(application: Application) -> None:
+    """
+    Реєструє хендлер для /start у головному Application.
+    """
+    application.add_handler(CommandHandler("start", start_command))
