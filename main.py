@@ -1,9 +1,10 @@
 import os
 import sqlite3
 from telegram.ext import ApplicationBuilder
+from modules.config import TOKEN, WEBHOOK_URL, PORT
+from modules.handlers.start import register_start_handler
 from modules.handlers.admin import register_admin_handlers
 from modules.handlers.profile import register_profile_handlers
-from modules.config import TOKEN, WEBHOOK_URL, PORT
 
 # === Ініціалізація БД ===
 DB_NAME = "bot_data.db"
@@ -11,7 +12,6 @@ DB_NAME = "bot_data.db"
 with sqlite3.connect(DB_NAME) as conn:
     cursor = conn.cursor()
 
-    # Пересоздання таблиці users
     cursor.execute("DROP TABLE IF EXISTS users")
     cursor.execute("""
         CREATE TABLE users (
@@ -74,6 +74,7 @@ with sqlite3.connect(DB_NAME) as conn:
 app = ApplicationBuilder().token(TOKEN).build()
 
 # Реєстрація хендлерів
+register_start_handler(app)
 register_admin_handlers(app)
 register_profile_handlers(app)
 
