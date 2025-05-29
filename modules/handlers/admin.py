@@ -173,4 +173,28 @@ async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def register_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code = update.message.text.strip()
-    if not re.match(r"^\\
+    # Перевіряємо, що код — це рівно 4 цифри
+    if not re.match(r"^\d{4}$", code):
+        await update.message.reply_text(
+            "❗️ Код має складатися з 4 цифр. Спробуйте ще раз:",
+            reply_markup=nav_buttons()
+        )
+        return STEP_REG_CODE
+
+    # Далі ваша логіка: збереження коду, вставка в БД тощо
+    user_id = update.effective_user.id
+    name = context.user_data.get("reg_name")
+    phone = context.user_data.get("reg_phone")
+
+    with sqlite3.connect(DB_NAME) as conn:
+        conn.execute(
+            "INSERT INTO registrations (user_id, name, phone) VALUES (?, ?, ?)",
+            (user_id, name, phone)
+        )
+        conn.commit()
+
+    await update.message.reply_text(
+        "✅ Реєстрація успішна! Оберііть дію:",
+        reply_markup=nav_buttons()
+    )
+    return STEP_MENU
