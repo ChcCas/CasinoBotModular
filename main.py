@@ -77,12 +77,11 @@ app = ApplicationBuilder().token(TOKEN).build()
 register_admin_handlers(app)
 register_profile_handlers(app)
 
-# Запуск через webhook
+# Запуск через Webhook
 if __name__ == "__main__":
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         url_path="/webhook",
-        webhook_url=WEBHOOK_URL,
-        open_browser=False
+        webhook_url=WEBHOOK_URL
     )
