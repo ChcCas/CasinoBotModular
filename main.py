@@ -1,18 +1,21 @@
 import os
 import sqlite3
 from telegram.ext import ApplicationBuilder
+
 from modules.config import TOKEN, WEBHOOK_URL, PORT
 from modules.handlers.start import register_start_handler
-from modules.handlers.admin import register_admin_handlers
+from modules.handlers.navigation import register_navigation_handlers
+from modules.handlers.registration import register_registration_handlers
 from modules.handlers.profile import register_profile_handlers
+from modules.handlers.deposit import register_deposit_handlers
+from modules.handlers.withdraw import register_withdraw_handlers
+from modules.handlers.admin import register_admin_handlers
+
+DB_NAME = os.getenv("DB_NAME", "bot_data.db")
 
 # === Ініціалізація БД ===
-DB_NAME = "bot_data.db"
-
 with sqlite3.connect(DB_NAME) as conn:
     cursor = conn.cursor()
-
-    # Таблиця користувачів (створюємо лише якщо ще не існує)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -22,8 +25,6 @@ with sqlite3.connect(DB_NAME) as conn:
             is_registered INTEGER DEFAULT 0
         )
     """)
-
-    # Таблиця реєстрацій
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS registrations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,8 +36,6 @@ with sqlite3.connect(DB_NAME) as conn:
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
-    # Таблиця поповнень
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS deposits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,8 +49,6 @@ with sqlite3.connect(DB_NAME) as conn:
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
-    # Таблиця виведень
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS withdrawals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,26 +61,27 @@ with sqlite3.connect(DB_NAME) as conn:
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
-
-    # Таблиця гілок повідомлень (thread-механізм)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS threads (
             user_id INTEGER PRIMARY KEY,
             base_msg_id INTEGER
         )
     """)
-
     conn.commit()
 
-# === Запуск бота ===
+# === Створюємо аплікацію ===
 app = ApplicationBuilder().token(TOKEN).build()
 
-# Реєстрація хендлерів
-register_start_handler(app)
-register_admin_handlers(app)
-register_profile_handlers(app)
+# === Регіструємо ВСІ хендлери в порядку:
+register_start_handler(app)              # /start  + «🏠 Головне меню»
+register_navigation_handlers(app)        # «◀️ Назад» + «🏠 Головне меню»
+register_registration_handlers(app)      # кнопка «Реєстрація»
+register_profile_handlers(app)           # «Мій профіль» + «Дізнатися картку»
+register_deposit_handlers(app)           # «Поповнити»
+register_withdraw_handlers(app)          # «Вивід коштів»
+register_admin_handlers(app)             # адмін-панель
 
-# Webhook-запуск
+# === Запуск через Webhook ===
 if __name__ == "__main__":
     app.run_webhook(
         listen="0.0.0.0",
