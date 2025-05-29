@@ -23,16 +23,18 @@ with sqlite3.connect(DB_NAME) as conn:
         )
     """)
 
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS registrations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            name TEXT,
-            phone TEXT,
-            status TEXT DEFAULT 'pending',
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    # Таблиця реєстрацій
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS registrations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        name TEXT,
+        phone TEXT,
+        card TEXT,  -- 🆕 додано
+        status TEXT DEFAULT 'pending',
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+""")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS deposits (
