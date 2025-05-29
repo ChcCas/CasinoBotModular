@@ -13,6 +13,7 @@ DB_NAME = "bot_data.db"
 
 with sqlite3.connect(DB_NAME) as conn:
     cursor = conn.cursor()
+
     # Таблиця користувачів
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -23,6 +24,7 @@ with sqlite3.connect(DB_NAME) as conn:
             is_registered INTEGER DEFAULT 0
         )
     """)
+
     # Таблиця реєстрацій
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS registrations (
@@ -35,6 +37,7 @@ with sqlite3.connect(DB_NAME) as conn:
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
     # Таблиця поповнень
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS deposits (
@@ -49,6 +52,7 @@ with sqlite3.connect(DB_NAME) as conn:
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
     # Таблиця виведень
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS withdrawals (
@@ -62,6 +66,7 @@ with sqlite3.connect(DB_NAME) as conn:
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
     # Таблиця гілок повідомлень
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS threads (
