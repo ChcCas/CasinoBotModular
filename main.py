@@ -12,6 +12,7 @@ DB_NAME = "bot_data.db"
 with sqlite3.connect(DB_NAME) as conn:
     cursor = conn.cursor()
 
+    # Пересоздання таблиці users
     cursor.execute("DROP TABLE IF EXISTS users")
     cursor.execute("""
         CREATE TABLE users (
@@ -24,18 +25,19 @@ with sqlite3.connect(DB_NAME) as conn:
     """)
 
     # Таблиця реєстрацій
-cursor.execute("""
-    CREATE TABLE IF NOT EXISTS registrations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        name TEXT,
-        phone TEXT,
-        card TEXT,  -- 🆕 додано
-        status TEXT DEFAULT 'pending',
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-""")
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS registrations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            name TEXT,
+            phone TEXT,
+            card TEXT,
+            status TEXT DEFAULT 'pending',
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
 
+    # Таблиця поповнень
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS deposits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,6 +52,7 @@ cursor.execute("""
         )
     """)
 
+    # Таблиця виведень
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS withdrawals (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -63,6 +66,7 @@ cursor.execute("""
         )
     """)
 
+    # Таблиця повідомлень (гілки)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS threads (
             user_id INTEGER PRIMARY KEY,
