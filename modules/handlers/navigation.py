@@ -8,46 +8,21 @@ from telegram.ext import (
     CallbackQueryHandler,
     MessageHandler,
     filters,
-    ContextTypes,
 )
-from modules.config import ADMIN_ID, DB_NAME
-from keyboards import PROVIDERS, PAYMENTS, nav_buttons, provider_buttons, payment_buttons
-from states import (
+from modules.config import DB_NAME
+from modules.keyboards import PROVIDERS, PAYMENTS, nav_buttons, provider_buttons, payment_buttons
+from modules.states import (
     STEP_MENU,
-    STEP_CLIENT_CARD,
-    STEP_PROVIDER,
-    STEP_PAYMENT,
-    STEP_DEPOSIT_AMOUNT,
-    STEP_CONFIRM_FILE,
-    STEP_CONFIRMATION,
-    STEP_WITHDRAW_AMOUNT,
-    STEP_WITHDRAW_METHOD,
-    STEP_WITHDRAW_DETAILS,
-    STEP_WITHDRAW_CONFIRM,
-    STEP_REG_NAME,
-    STEP_REG_PHONE,
-    STEP_REG_CODE,
-    STEP_ADMIN_SEARCH,
-    STEP_ADMIN_BROADCAST,
+    STEP_REG_NAME, STEP_REG_PHONE, STEP_REG_CODE,
+    STEP_CLIENT_CARD, STEP_PROVIDER, STEP_PAYMENT,
+    STEP_DEPOSIT_AMOUNT, STEP_CONFIRM_FILE, STEP_CONFIRMATION,
+    STEP_WITHDRAW_AMOUNT, STEP_WITHDRAW_METHOD, STEP_WITHDRAW_DETAILS, STEP_WITHDRAW_CONFIRM,
+    STEP_ADMIN_SEARCH, STEP_ADMIN_BROADCAST,
 )
 from .start import start_command
-from .profile import start_profile, find_card
+from .profile import start_profile, profile_enter_card, profile_enter_phone
+from .registration import registration_start, register_name, register_phone, register_code
 from .admin import show_admin_panel, admin_search, admin_broadcast
-from .client import (
-    register_name,
-    register_phone,
-    register_code,
-    process_card,
-    process_provider,
-    process_payment,
-    process_deposit_amount,
-    process_file,
-    confirm_submission,
-    process_withdraw_amount,
-    process_withdraw_method,
-    process_withdraw_details,
-    confirm_withdrawal,
-)
 
 def _init_threads():
     with sqlite3.connect(DB_NAME) as conn:
@@ -59,14 +34,31 @@ def _init_threads():
         """)
         conn.commit()
 
-# ⬇⬇⬇ Виправлена async-функція ⬇⬇⬇
+def register_navigation_handlers(app):
+    _init_threads()
+    conv = ConversationHandler(
+        entry_points=[
+            CommandHandler("start", start_command),
+            CallbackQueryHandler(start_command, pattern="^(home|back)$"),
+        ],
+        states={
+            STEP_MENU: [CallbackQueryHandler(menu_handler, pattern=".*")],
+            # … тут перераховані ваші стани, як у прикладі вище …
+        },
+        fallbacks=[CallbackQueryHandler(start_command, pattern="^(home|back)$")],
+        per_message=True,
+        per_chat=True,
+        name="casino_conversation",
+    )
+    app.add_handler(conv, group=1)
+
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
 
     if data == "admin_panel":
-        return await show_admin_panel(query)
+        return await show_admin_panel(update, context)
 
     if data in ("home", "back"):
         return await start_command(update, context)
@@ -75,7 +67,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await start_profile(update, context)
 
     if data == "client_find_card":
-        return await find_card(update, context)
+        return await profile_enter_card(update, context)  # пошук картки
 
     if data == "deposit":
         await query.message.reply_text("💸 Введіть суму для поповнення:", reply_markup=nav_buttons())
@@ -86,78 +78,13 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return STEP_WITHDRAW_AMOUNT
 
     if data == "register":
-        await query.message.reply_text("📝 Введіть ваше ім’я:", reply_markup=nav_buttons())
-        return STEP_REG_NAME
+        return await registration_start(update, context)
 
     if data == "help":
         await query.message.reply_text(
-            "ℹ️ Допомога:\n/start — перезапуск бота\nКонтакт підтримки: @admin",
+            "ℹ️ /start — перезапуск\nКонтакт підтримки: @admin",
             reply_markup=nav_buttons()
         )
         return STEP_MENU
 
     return STEP_MENU
-
-conv = ConversationHandler(
-    entry_points=[
-        CommandHandler("start", start_command),
-        CallbackQueryHandler(start_command, pattern="^(home|back)$", per_message=True),
-    ],
-    states={
-        STEP_MENU: [
-            CallbackQueryHandler(menu_handler, pattern=".*", per_message=True)
-        ],
-        STEP_REG_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, register_name)],
-        STEP_REG_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, register_phone)],
-        STEP_REG_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, register_code)],
-        STEP_CLIENT_CARD: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_card)],
-        STEP_PROVIDER: [
-            CallbackQueryHandler(
-                process_provider,
-                pattern="^(" + "|".join(map(re.escape, PROVIDERS)) + ")$",
-                per_message=True,
-            )
-        ],
-        STEP_PAYMENT: [
-            CallbackQueryHandler(
-                process_payment,
-                pattern="^(" + "|".join(map(re.escape, PAYMENTS)) + ")$",
-                per_message=True,
-            )
-        ],
-        STEP_DEPOSIT_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_deposit_amount)],
-        STEP_CONFIRM_FILE: [
-            MessageHandler(
-                filters.PHOTO | filters.Document.ALL | filters.VIDEO,
-                process_file
-            )
-        ],
-        STEP_CONFIRMATION: [
-            CallbackQueryHandler(confirm_submission, pattern="^confirm$", per_message=True)
-        ],
-        STEP_WITHDRAW_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_withdraw_amount)],
-        STEP_WITHDRAW_METHOD: [
-            CallbackQueryHandler(
-                process_withdraw_method,
-                pattern="^(" + "|".join(map(re.escape, PAYMENTS)) + ")$",
-                per_message=True,
-            )
-        ],
-        STEP_WITHDRAW_DETAILS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_withdraw_details)],
-        STEP_WITHDRAW_CONFIRM: [
-            CallbackQueryHandler(confirm_withdrawal, pattern="^confirm_withdraw$", per_message=True)
-        ],
-        STEP_ADMIN_SEARCH: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_search)],
-        STEP_ADMIN_BROADCAST: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_broadcast)],
-    },
-    fallbacks=[
-        CallbackQueryHandler(start_command, pattern="^(home|back)$", per_message=True),
-    ],
-    per_message=True,
-    per_chat=True,
-    name="casino_conversation",
-)
-
-def register_navigation_handlers(app):
-    _init_threads()
-    app.add_handler(conv, group=1)
