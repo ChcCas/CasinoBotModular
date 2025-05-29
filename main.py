@@ -1,19 +1,18 @@
 import os
 import sqlite3
 from telegram.ext import ApplicationBuilder
-
 from modules.config import TOKEN, WEBHOOK_URL, PORT
 from modules.handlers.start import register_start_handler
-from modules.handlers.navigation import register_navigation_handlers
-from modules.handlers.registration import register_registration_handlers
+from modules.handlers.navigation import register_navigation_handlers       # ← додаємо
 from modules.handlers.profile import register_profile_handlers
 from modules.handlers.deposit import register_deposit_handlers
 from modules.handlers.withdraw import register_withdraw_handlers
+from modules.handlers.registration import register_registration_handlers
 from modules.handlers.admin import register_admin_handlers
 
-DB_NAME = os.getenv("DB_NAME", "bot_data.db")
+DB_NAME = os.getenv("DB_NAME", "bot.db")
 
-# === Ініціалізація БД ===
+# === Ініціалізація БД (лише CREATE IF NOT EXISTS) ===
 with sqlite3.connect(DB_NAME) as conn:
     cursor = conn.cursor()
     cursor.execute("""
@@ -69,19 +68,19 @@ with sqlite3.connect(DB_NAME) as conn:
     """)
     conn.commit()
 
-# === Створюємо аплікацію ===
+# === Запуск бота ===
 app = ApplicationBuilder().token(TOKEN).build()
 
-# === Регіструємо ВСІ хендлери в порядку:
-register_start_handler(app)              # /start  + «🏠 Головне меню»
-register_navigation_handlers(app)        # «◀️ Назад» + «🏠 Головне меню»
-register_registration_handlers(app)      # кнопка «Реєстрація»
-register_profile_handlers(app)           # «Мій профіль» + «Дізнатися картку»
-register_deposit_handlers(app)           # «Поповнити»
-register_withdraw_handlers(app)          # «Вивід коштів»
-register_admin_handlers(app)             # адмін-панель
+# — Реєстрація всіх хендлерів —
+register_start_handler(app)            # /start та кнопка 🏠
+register_navigation_handlers(app)      # ◀️ «Назад» та 🏠 «Головне меню»
+register_profile_handlers(app)         # логіка «Мій профіль»
+register_deposit_handlers(app)         # логіка поповнення
+register_withdraw_handlers(app)        # логіка виведення
+register_registration_handlers(app)    # логіка реєстрації
+register_admin_handlers(app)           # адмін-панель
 
-# === Запуск через Webhook ===
+# Запуск через webhook
 if __name__ == "__main__":
     app.run_webhook(
         listen="0.0.0.0",
