@@ -1,79 +1,76 @@
-import re
+# modules/handlers/profile.py
+
 from telegram import Update
 from telegram.ext import (
-    ContextTypes,
-    ConversationHandler,
     CallbackQueryHandler,
     MessageHandler,
+    ConversationHandler,
     filters,
+    ContextTypes,
+    Application
 )
-from modules.db import get_user, save_user
+from modules.db import find_user  # ваша функція пошуку в БД
 from modules.keyboards import nav_buttons, client_menu
-from modules.states import STEP_MENU, STEP_PROFILE_ENTER_CARD, STEP_PROFILE_ENTER_PHONE
+from modules.states import (
+    STEP_FIND_CARD_PHONE,
+    STEP_CLIENT_AUTH,
+)
 
 async def start_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Вхід від натискання "🔍 Пошук" у головному меню
     await update.callback_query.answer()
-    if get_user(update.effective_user.id):
-        await update.callback_query.message.reply_text(
-            "Ви вже авторизовані 👇",
-            reply_markup=client_menu(is_authorized=True),
-        )
-        return STEP_MENU
-
-    await update.callback_query.message.reply_text(
-        "Введіть номер картки (4–7 цифр):",
-        reply_markup=nav_buttons(),
+    msg = await update.callback_query.message.reply_text(
+        "🔍 Введіть ID або картку для пошуку:",
+        reply_markup=nav_buttons()
     )
-    return STEP_PROFILE_ENTER_CARD
+    # Зберігаємо ID цього повідомлення, щоб потім його редагувати
+    context.user_data['base_msg_id'] = msg.message_id
+    return STEP_FIND_CARD_PHONE
 
-async def profile_enter_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    card = re.sub(r"\D", "", update.message.text)
-    if not (4 <= len(card) <= 7):
-        await update.message.reply_text(
-            "Невірний формат картки. Має бути від 4 до 7 цифр.",
-            reply_markup=nav_buttons(),
+async def find_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.message.text.strip()
+    user = find_user(query)  # повертає None або дані користувача
+
+    if user:
+        text      = "✅ Авторизація успішна!"
+        keyboard  = client_menu(is_admin=False)
+        next_state = STEP_CLIENT_AUTH
+    else:
+        text      = "❌ Користувача не знайдено. Спробуйте ще раз:"
+        keyboard  = nav_buttons()
+        next_state = STEP_FIND_CARD_PHONE
+
+    base_id = context.user_data.get('base_msg_id')
+    if base_id:
+        # Редагуємо існуюче повідомлення
+        await context.bot.edit_message_text(
+            text=text,
+            chat_id=update.effective_chat.id,
+            message_id=base_id,
+            reply_markup=keyboard
         )
-        return STEP_PROFILE_ENTER_CARD
+    else:
+        # На випадок, якщо base_msg_id загубиться
+        await update.message.reply_text(text, reply_markup=keyboard)
 
-    context.user_data["card"] = card
-    await update.message.reply_text(
-        "Тепер введіть номер телефону (0XXXXXXXXX):",
-        reply_markup=nav_buttons(),
-    )
-    return STEP_PROFILE_ENTER_PHONE
+    # Якщо ще не авторизовані — залишаємо цей же message_id,
+    # щоб користувач міг спробувати ще раз у тому самому полі.
+    if next_state == STEP_FIND_CARD_PHONE:
+        context.user_data['base_msg_id'] = base_id
+    else:
+        # Після успіху чистимо
+        context.user_data.pop('base_msg_id', None)
 
-async def profile_enter_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    phone = re.sub(r"\D", "", update.message.text)
-    if not (len(phone) == 10 and phone.startswith("0")):
-        await update.message.reply_text(
-            "Невірний телефон. Має бути 10 цифр і починатися з 0.",
-            reply_markup=nav_buttons(),
-        )
-        return STEP_PROFILE_ENTER_PHONE
+    return next_state
 
-    save_user(update.effective_user.id, context.user_data["card"], phone)
-    await update.message.reply_text(
-        "✅ Авторизація успішна!",
-        reply_markup=client_menu(is_authorized=True),
-    )
-    return STEP_MENU
-
-def register_profile_handlers(app):
+def register_profile_handlers(app: Application) -> None:
     conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(start_profile, pattern="^client_profile$")],
+        entry_points=[CallbackQueryHandler(start_profile, pattern="^profile$")],
         states={
-            STEP_PROFILE_ENTER_CARD: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_card),
-                CallbackQueryHandler(lambda u,c: STEP_MENU, pattern="^home$"),
-                CallbackQueryHandler(lambda u,c: STEP_MENU, pattern="^back$"),
-            ],
-            STEP_PROFILE_ENTER_PHONE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, profile_enter_phone),
-                CallbackQueryHandler(lambda u,c: STEP_MENU, pattern="^home$"),
-                CallbackQueryHandler(lambda u,c: STEP_MENU, pattern="^back$"),
-            ],
+            STEP_FIND_CARD_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, find_card)],
+            STEP_CLIENT_AUTH:    [CallbackQueryHandler(lambda u,c: None)],  # ваші подальші хендлери
         },
-        fallbacks=[CallbackQueryHandler(lambda u,c: STEP_MENU, pattern="^home$")],
-        allow_reentry=True,
+        fallbacks=[],
+        per_message=True
     )
     app.add_handler(conv)
