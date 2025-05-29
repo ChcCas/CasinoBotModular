@@ -33,7 +33,7 @@ from states import (
     STEP_ADMIN_BROADCAST,
 )
 from .start import start_command
-from .admin import show_admin_panel
+return await show_admin_panel(query)
 from modules.db import search_user, broadcast_message
 
 # Ініціалізація таблиці threads
