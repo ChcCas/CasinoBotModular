@@ -1,4 +1,5 @@
-# modules/handlers/navigation.py
+def register_admin_handlers(app):
+    pass  # або додай тут справжню реєстрацію хендлерів, якщо вона потрібна# modules/handlers/navigation.py
 
 import os
 import re
