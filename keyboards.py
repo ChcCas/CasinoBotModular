@@ -39,11 +39,12 @@ def client_menu(is_authorized: bool) -> InlineKeyboardMarkup:
     if is_authorized:
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("🎁 Зняти кешбек", callback_data="cashback")],
-            [InlineKeyboardButton("💰 Поповнити",      callback_data="deposit")],
-            [InlineKeyboardButton("💸 Вивід",          callback_data="WITHDRAW_START")],
-            [InlineKeyboardButton("📖 Історія",       callback_data="history")],
-            [InlineKeyboardButton("🔒 Вийти",         callback_data="logout")],
-            [InlineKeyboardButton("ℹ️ Допомога",      callback_data="help")],
+            [InlineKeyboardButton("💰 Поповнити",    callback_data="deposit")],
+            [InlineKeyboardButton("💸 Вивід",        callback_data="WITHDRAW_START")],
+            [InlineKeyboardButton("📖 Історія",      callback_data="history")],
+            [InlineKeyboardButton("🔒 Вийти",        callback_data="logout")],
+            [InlineKeyboardButton("ℹ️ Допомога",     callback_data="help")],
+            [InlineKeyboardButton("🏠 Головне меню", callback_data="home")],
         ])
     else:
         return InlineKeyboardMarkup([
