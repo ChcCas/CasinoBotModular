@@ -59,7 +59,8 @@ def _init_threads():
         """)
         conn.commit()
 
-def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ⬇⬇⬇ Виправлена async-функція ⬇⬇⬇
+async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     data = query.data
