@@ -3,9 +3,10 @@
 from pathlib import Path
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes, Application
-from keyboards import main_menu   # <-- імпортуємо з keyboards.py, а не з «клавиатуры»
+from keyboards import main_menu  # <-- правильный импорт из keyboards.py
 
-# ─── Знаходимо корінь проєкту (…/src/modules/handlers/start.py → …/src)
+# Определяем корень проекта:
+# modules/handlers/start.py → modules/ → src/ → project root
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ASSETS_DIR   = PROJECT_ROOT / "assets"
 GIF_PATH     = ASSETS_DIR / "welcome.gif"
@@ -13,11 +14,11 @@ GIF_PATH     = ASSETS_DIR / "welcome.gif"
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Обробник команди /start:
-     – якщо є файл assets/welcome.gif, надсилає його як анімацію;
-     – інакше просто вітає текстом і клавіатурою.
+    Хендлер /start:
+    – если есть assets/welcome.gif, шлём его как анимацию;
+    – иначе — просто текст с кнопками.
     """
-    caption = "🎲 Ласкаво просимо до CasinoBot!"
+    caption  = "🎲 Добро пожаловать в CasinoBot!"
     keyboard = main_menu()
 
     if GIF_PATH.is_file():
@@ -34,8 +35,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
-def register_start_handler(application: Application) -> None:
+def register_start_handler(app: Application) -> None:
     """
-    Додаємо /start до диспетчера.
+    Регистрирует CommandHandler для /start.
     """
-    application.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("start", start_command))
