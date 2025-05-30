@@ -1,0 +1,23 @@
+# модуль із константами для callback_data
+от импорт Энум, 
+
+ Класс   CbCBCB(Enum):(Энум):
+    # навігація
+  ГЛАВНАЯ =  "дом" "home"
+    BACK             = НАЗАД = НАЗАД = Назад = "назад" "back"
+    # клёнёр
+ КЛИЕНТ_ПРОФИЛЬ = "   клиент_профиль""клиент_профиль" 
+ CLIENT_FIND = КЛИЕНТ_НАЙТИ = КЛИЕНТ_НАЙТИ = КЛИЕНТ_НАЙТИ = "клиент_find""client_find"клиент_find"клиент_find""
+"дедедепозит_дестарт"позволит_стартовый""позволит_стартовый""
+ «ОТКАЖИ_СТАРТ» = ""Репутациядер_стартовый"ретидер_старт"ретидер_старт"
+            #  епозит епозит       
+ ДЕПОЗИТ_СУММА = "   депозит_сумма""deposit_amount" 
+ DEPOSIT_FILE = "deposit_file" "deposit_file"
+ DEPOSIT_CONFIRM = "deposit_confirm" "deposit_confirm"
+      # #  «дьюти»
+ RE_AMOUNT = "   "withdraw_amount"  "    
+"withdraw_method"'rein_method''rein_method''rein_method'
+ WITHDRAW_DETAILS = "withdraw_details"rein_details"withdraw_details"
+ WITHDRAW_CONFIRM = "withdraw_confirm"откажи_подтверди»""
+— ‑ шепчущийся ‑ ‑ – ‑ – ‑ шептуанный – ‑ – в – в – в – – шедевр
+ ПОМОЩЬ = "помогите"
