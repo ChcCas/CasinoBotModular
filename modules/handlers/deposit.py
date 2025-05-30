@@ -1,14 +1,16 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    MessageHandler, CallbackQueryHandler,
+    CallbackQueryHandler, MessageHandler,
     ConversationHandler, filters, ContextTypes
 )
-from .emails import notify_admin  # уявна функція
-from modules.keyboards import nav_buttons
 from modules.callbacks import CB
+from modules.keyboards import nav_buttons, client_menu
 from modules.states import (
     STEP_DEPOSIT_AMOUNT, STEP_DEPOSIT_FILE, STEP_DEPOSIT_CONFIRM
 )
+# уявна функція для нотифікації адміна
+async def notify_admin_deposit(user_id, amount, file_id):
+    pass
 
 async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -21,45 +23,39 @@ async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def deposit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     amount = update.message.text.strip()
-    # можна валідувати тут…
     context.user_data['deposit_amount'] = amount
     base_id = context.user_data['base_msg']
-
     await context.bot.edit_message_text(
         chat_id=update.effective_chat.id,
         message_id=base_id,
-        text=f"💰 Сума: {amount}\nЗавантажте підтверджувальний файл:",
-        reply_markup=nav_buttons()
+        text=f"💰 Сума: {amount}\nЗавантажте підтвердження:",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Скасувати", callback_data=CB.BACK.value)]])
     )
     return STEP_DEPOSIT_FILE
 
 async def deposit_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file = update.message.document or update.message.photo[-1]
-    file_id = file.file_id
-    context.user_data['deposit_file_id'] = file_id
+    context.user_data['deposit_file_id'] = file.file_id
     base_id = context.user_data['base_msg']
-
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Підтвердити", callback_data=CB.DEPOSIT_CONFIRM.value)],
+        [InlineKeyboardButton("🚫 Скасувати",   callback_data=CB.BACK.value)]
+    ])
     await context.bot.edit_message_text(
         chat_id=update.effective_chat.id,
         message_id=base_id,
-        text="✅ Файл отримано. Підтвердити поповнення?",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("Підтвердити", callback_data=CB.DEPOSIT_CONFIRM.value)],
-            [InlineKeyboardButton("🚫 Скасувати",   callback_data=CB.BACK.value)],
-        ])
+        text="✅ Файл отримано. Підтвердіть поповнення:",
+        reply_markup=kb
     )
     return STEP_DEPOSIT_CONFIRM
 
 async def deposit_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     amt = context.user_data['deposit_amount']
-    file_id = context.user_data['deposit_file_id']
-    # шлемо адміну email/SMS/будьщо
-    await notify_admin(user_id=update.effective_user.id, amount=amt, file_id=file_id)
-
-    # завершуємо
+    fid = context.user_data['deposit_file_id']
+    await notify_admin_deposit(update.effective_user.id, amt, fid)
     await update.callback_query.message.edit_text(
-        f"🎉 Депозит на суму {amt} підтверджено. Дякуємо!",
+        f"🎉 Депозит {amt} підтверджено.",
         reply_markup=client_menu(is_authorized=True)
     )
     context.user_data.clear()
