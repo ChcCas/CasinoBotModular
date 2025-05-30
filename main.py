@@ -2,11 +2,14 @@
 
 import logging
 from telegram.ext import ApplicationBuilder, ContextTypes
+
 from modules.config import TOKEN, WEBHOOK_URL, PORT
 from modules.db import init_db
 from modules.handlers.start import register_start_handler
 from modules.handlers.admin import register_admin_handlers
-from modules.handlers.profile import register_profile_handlers
+from modules.handlers.deposit import deposit_conv
+from modules.handlers.withdraw import withdraw_conv
+from modules.handlers.profile import profile_conv
 from modules.handlers.navigation import register_navigation_handlers
 
 # ─── Налаштування логування ───────────────────────────────────────────────────
@@ -29,17 +32,19 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_error_handler(error_handler)
 
-    # 3) Реєструємо всі наші хендлери
+    # 3) Реєструємо /start та адмін-хендлери
     register_start_handler(app)
     register_admin_handlers(app)
-    register_profile_handlers(app)
+
+    # 4) Реєструємо ConversationHandler’и для клієнтських сценаріїв
+    app.add_handler(profile_conv, group=1)
+    app.add_handler(deposit_conv, group=1)
+    app.add_handler(withdraw_conv, group=1)
+
+    # 5) Реєструємо загальний роутер кнопок (home/back/help тощо)
     register_navigation_handlers(app)
 
-    # 4) Запускаємо бот у режимі webhook
-    #    - listen: IP-адреса, на якій Flask-сервер слухає вхідні з’єднання
-    #    - port: порт, по якому Render (або інший хостинг) пробросить трафік
-    #    - url_path: шлях для POST-запитів від Telegram (має співпадати з WEBHOOK_URL)
-    #    - webhook_url: публічний URL, куди Telegram надсилатиме оновлення
+    # 6) Запускаємо бот у режимі webhook
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
