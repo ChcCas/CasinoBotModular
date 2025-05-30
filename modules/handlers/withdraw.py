@@ -1,126 +1,111 @@
 # modules/handlers/withdraw.py
 
-import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
     MessageHandler,
+    ConversationHandler,
     filters,
     ContextTypes,
 )
-
-from modules.config import ADMIN_ID
-from modules.db import get_user
-from keyboards import nav_buttons, main_menu
-from states import (
-    STEP_WITHDRAW_START,
+from modules.keyboards import nav_buttons, payment_buttons, client_menu
+from modules.callbacks import CB
+from modules.states import (
     STEP_WITHDRAW_AMOUNT,
+    STEP_WITHDRAW_METHOD,
+    STEP_WITHDRAW_DETAILS,
     STEP_WITHDRAW_CONFIRM,
-    STEP_MENU,
 )
 
-def register_withdraw_handlers(app):
-    # 1) Точка входу — тільки авторизовані клієнти
-    app.add_handler(
-        CallbackQueryHandler(withdraw_start, pattern="^WITHDRAW_START$"),
-        group=0,
-    )
-    # 2) Клієнт вводить суму
-    app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_amount),
-        group=1,
-    )
-    # 3) Підтвердження і відправка адміну
-    app.add_handler(
-        CallbackQueryHandler(withdraw_confirm, pattern="^CONFIRM_WITHDRAW$"),
-        group=2,
-    )
-
-
+# 1) Старт сценарію виведення
 async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Обробник натискання кнопки 'Вивід коштів'.
-    Перевіряємо, чи є клієнт в БД (тобто авторизований),
-    і якщо так — пропонуємо ввести суму.
-    """
-    user_id = update.effective_user.id
     await update.callback_query.answer()
-
-    row = get_user(user_id)
-    if not row:
-        # Якщо не авторизований — кидаємо назад у головне меню з проханням авторизуватися
-        await update.callback_query.message.reply_text(
-            "Ви ще не авторизовані. Будь ласка, спочатку натисніть «Мій профіль» та виконайте авторизацію.",
-            reply_markup=main_menu(is_admin=False, is_auth=False),
-        )
-        return STEP_MENU
-
-    # Запитуємо суму виводу
-    await update.callback_query.message.reply_text(
-        "Введіть суму для виведення:",
-        reply_markup=nav_buttons(),
+    msg = await update.callback_query.message.reply_text(
+        "💸 Введіть суму для виведення:",
+        reply_markup=nav_buttons()
     )
+    context.user_data['base_msg'] = msg.message_id
     return STEP_WITHDRAW_AMOUNT
 
-
+# 2) Отримуємо суму
 async def withdraw_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Обробник вводу суми виводу.
-    Перевіряємо валідність, зберігаємо в user_data і показуємо кнопку підтвердження.
-    """
-    text = update.message.text.strip()
-    if not text.isdigit() or int(text) <= 0:
-        # Невірна сума
-        await update.message.reply_text(
-            "Невірна сума. Введіть позитивне число.",
-            reply_markup=nav_buttons(),
-        )
-        return STEP_WITHDRAW_AMOUNT
+    amount = update.message.text.strip()
+    context.user_data['withdraw_amount'] = amount
+    base_id = context.user_data['base_msg']
 
-    context.user_data["withdraw_amount"] = text
+    await context.bot.edit_message_text(
+        chat_id=update.effective_chat.id,
+        message_id=base_id,
+        text=f"💸 Сума для виведення: {amount}\nОберіть метод:",
+        reply_markup=payment_buttons()  # Карта / Криптопереказ + nav
+    )
+    return STEP_WITHDRAW_METHOD
 
-    # Показуємо кнопку «Підтвердити»
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Підтвердити вивід", callback_data="CONFIRM_WITHDRAW")],
-        [InlineKeyboardButton("◀️ Назад",            callback_data="BACK")],
-        [InlineKeyboardButton("🏠 Головне меню",     callback_data="HOME")],
+# 3) Отримуємо метод виведення
+async def withdraw_method(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    method = update.callback_query.data
+    context.user_data['withdraw_method'] = method
+    base_id = context.user_data['base_msg']
+
+    await update.callback_query.message.edit_text(
+        text=f"💸 Метод: {method}\nВведіть реквізити ({method}):",
+        reply_markup=nav_buttons()
+    )
+    return STEP_WITHDRAW_DETAILS
+
+# 4) Отримуємо реквізити
+async def withdraw_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    details = update.message.text.strip()
+    context.user_data['withdraw_details'] = details
+    base_id = context.user_data['base_msg']
+
+    confirm_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Підтвердити", callback_data=CB.WITHDRAW_CONFIRM.value)],
+        [InlineKeyboardButton("🚫 Скасувати",    callback_data=CB.BACK.value)],
     ])
-    await update.message.reply_text(
-        f"Ви бажаєте вивести {text} грн. Підтвердіть заявку:",
-        reply_markup=kb,
+
+    await context.bot.edit_message_text(
+        chat_id=update.effective_chat.id,
+        message_id=base_id,
+        text=(
+            f"💸 Підтвердіть виведення:\n"
+            f"• Сума: {context.user_data['withdraw_amount']}\n"
+            f"• Метод: {context.user_data['withdraw_method']}\n"
+            f"• Реквізити: {details}"
+        ),
+        reply_markup=confirm_kb
     )
     return STEP_WITHDRAW_CONFIRM
 
-
+# 5) Підтвердження та завершення
 async def withdraw_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Після натискання «✅ Підтвердити вивід» надсилаємо адміну заяву
-    і повертаємо клієнта в головне меню.
-    """
     await update.callback_query.answer()
+    amt    = context.user_data['withdraw_amount']
+    method = context.user_data['withdraw_method']
+    details= context.user_data['withdraw_details']
 
-    user = update.effective_user
-    row = get_user(user.id)
-    card = row[1]  # з БД повертаємо (user_id, card, phone)
-    amount = context.user_data.get("withdraw_amount")
-    ts = datetime.datetime.now().isoformat(sep=" ", timespec="seconds")
+    # TODO: шлемо адміну повідомлення про заявку
+    # await notify_admin_withdraw(update.effective_user.id, amt, method, details)
 
-    # Формуємо текст заявки
-    text = (
-        f"💸 Вивід коштів від {user.full_name} ({user.id}):\n"
-        f"Картка клієнта: {card}\n"
-        f"Сума: {amount} грн\n"
-        f"🕒 {ts}"
+    await update.callback_query.message.edit_text(
+        f"🎉 Ваш запит на виведення {amt} за методом {method} прийнято.\n"
+        "Дякуємо за користування CasinoBot!",
+        reply_markup=client_menu(is_authorized=True)
     )
-    # Надсилаємо адміну
-    await context.bot.send_message(chat_id=ADMIN_ID, text=text)
 
-    # Очищаємо збережену суму
-    context.user_data.pop("withdraw_amount", None)
+    context.user_data.clear()
+    return ConversationHandler.END
 
-    # Повертаємо клієнта в меню
-    await update.callback_query.message.reply_text(
-        "Заявка на виведення відправлена адміну.",
-        reply_markup=main_menu(is_admin=False, is_auth=True),
-    )
-    return STEP_MENU
+# ConversationHandler для виведення
+withdraw_conv = ConversationHandler(
+    entry_points=[CallbackQueryHandler(withdraw_start, pattern=f"^{CB.WITHDRAW_START.value}$")],
+    states={
+        STEP_WITHDRAW_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_amount)],
+        STEP_WITHDRAW_METHOD: [CallbackQueryHandler(withdraw_method, pattern="^Карта$|^Криптопереказ$")],
+        STEP_WITHDRAW_DETAILS:[MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_details)],
+        STEP_WITHDRAW_CONFIRM:[CallbackQueryHandler(withdraw_confirm, pattern=f"^{CB.WITHDRAW_CONFIRM.value}$")],
+    },
+    fallbacks=[CallbackQueryHandler(withdraw_start, pattern=f"^{CB.BACK.value}$")],
+    per_message=True,
+)
