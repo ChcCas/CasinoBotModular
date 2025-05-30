@@ -99,3 +99,12 @@ def search_user(query: str):
     row = cursor.fetchone()
     conn.close()
     return row
+def authorize_card(user_id: int, card: str):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT OR REPLACE INTO clients (user_id, card) VALUES (?, ?)",
+        (user_id, card)
+    )
+    conn.commit()
+    conn.close()
