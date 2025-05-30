@@ -1,6 +1,6 @@
 # modules/handlers/profile.py
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     CallbackQueryHandler,
     MessageHandler,
@@ -9,64 +9,78 @@ from telegram.ext import (
     ContextTypes,
     Application
 )
-from modules.db import search_user            # <-- використовуємо search_user, а не find_user
-from modules.keyboards import nav_buttons, client_menu
-from modules.states import (
-    STEP_FIND_CARD_PHONE,
-    STEP_CLIENT_AUTH,
-)
+from modules.config import ADMIN_ID
+from modules.keyboards import nav_buttons
+from modules.callbacks import CB
+from modules.states import STEP_FIND_CARD_PHONE
 
 async def start_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Вхід із натискання '🔍 Пошук' у клієнтському меню."""
+    """
+    Entry point: користувач натиснув “💳 Мій профіль”.
+    Запитуємо номер клубної картки.
+    """
     await update.callback_query.answer()
     msg = await update.callback_query.message.reply_text(
-        "🔍 Введіть ID або картку для пошуку:",
+        "💳 Введіть номер вашої клубної картки:",
         reply_markup=nav_buttons()
     )
-    context.user_data['base_msg_id'] = msg.message_id
+    context.user_data['base_msg'] = msg.message_id
     return STEP_FIND_CARD_PHONE
 
 async def find_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обробка введеного ID/картки: редагуємо базове повідомлення."""
-    query = update.message.text.strip()
-    user = search_user(query)   # <-- тут викликаємо search_user()
+    """
+    Обробка введеного номера картки:
+     1) надсилаємо адміну повідомлення з кнопкою підтвердження;
+     2) інформуємо користувача, що запит відправлено.
+    """
+    card = update.message.text.strip()
+    user_id = update.effective_user.id
 
-    if user:
-        text       = "✅ Авторизація успішна!"
-        keyboard   = client_menu(is_admin=False)
-        next_state = STEP_CLIENT_AUTH
-    else:
-        text       = "❌ Користувача не знайдено. Спробуйте ще раз:"
-        keyboard   = nav_buttons()
-        next_state = STEP_FIND_CARD_PHONE
-
-    base_id = context.user_data.get('base_msg_id')
-    if base_id:
-        await context.bot.edit_message_text(
-            text=text,
-            chat_id=update.effective_chat.id,
-            message_id=base_id,
-            reply_markup=keyboard
+    # 1) Надсилаємо адміну запит із callback для підтвердження
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton(
+            "✅ Підтвердити картку",
+            callback_data=f"admin_confirm_card:{user_id}:{card}"
         )
-    else:
-        await update.message.reply_text(text, reply_markup=keyboard)
+    ]])
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=(
+            f"ℹ️ Користувач {update.effective_user.full_name} (ID {user_id})\n"
+            f"ввів картку: {card}\n"
+            "Перевірте наявність карти та натисніть «✅ Підтвердити картку»."
+        ),
+        reply_markup=kb
+    )
 
-    # Якщо ще не авторизовані — підтягуємо message_id, щоб залишити в одному повідомленні
-    if next_state == STEP_FIND_CARD_PHONE:
-        context.user_data['base_msg_id'] = base_id
-    else:
-        context.user_data.pop('base_msg_id', None)
+    # 2) Повідомляємо клієнта
+    await update.message.reply_text(
+        "✅ Ваш запит відправлено адміністратору. Очікуйте підтвердження.",
+        reply_markup=nav_buttons()
+    )
 
-    return next_state
+    # Завершуємо сценарій
+    return ConversationHandler.END
+
+# ConversationHandler для “Мій профіль”
+profile_conv = ConversationHandler(
+    entry_points=[
+        CallbackQueryHandler(start_profile, pattern=f"^{CB.CLIENT_PROFILE.value}$")
+    ],
+    states={
+        STEP_FIND_CARD_PHONE: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, find_card)
+        ],
+    },
+    fallbacks=[
+        CallbackQueryHandler(start_profile, pattern=f"^{CB.BACK.value}$"),
+        CallbackQueryHandler(start_profile, pattern=f"^{CB.HOME.value}$"),
+    ],
+    per_message=True,
+)
 
 def register_profile_handlers(app: Application) -> None:
-    conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(start_profile, pattern="^profile$")],
-        states={
-            STEP_FIND_CARD_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, find_card)],
-            STEP_CLIENT_AUTH:    [CallbackQueryHandler(lambda u, c: None)],  # тут ваші подальші хендлери
-        },
-        fallbacks=[],
-        per_message=True
-    )
-    app.add_handler(conv)
+    """
+    Реєструє ConversationHandler для сценарію профілю.
+    """
+    app.add_handler(profile_conv, group=1)
