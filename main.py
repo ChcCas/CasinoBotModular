@@ -2,8 +2,10 @@
 
 import logging
 from telegram.ext import ApplicationBuilder, ContextTypes
+
 from modules.config import TOKEN, WEBHOOK_URL, PORT
 from modules.db import init_db
+
 from modules.handlers.start import register_start_handler
 from modules.handlers.admin import register_admin_handlers
 from modules.handlers.profile import register_profile_handlers
@@ -36,16 +38,16 @@ def main():
     # 4) Додаємо глобальний обробник помилок
     app.add_error_handler(error_handler)
 
-    # 5) Регіструємо /start та адмінські хендлери (група 0)
+    # 5) Регіструємо /start та адмінські хендлери (group=0)
     register_start_handler(app)
     register_admin_handlers(app)
 
-    # 6) Регіструємо клієнтські ConversationHandler-и (група 0)
+    # 6) Регіструємо клієнтські ConversationHandler-и (group=0)
     register_profile_handlers(app)
     register_deposit_handlers(app)
     register_withdraw_handlers(app)
 
-    # 7) Регіструємо загальний навігаційний роутер (група 1)
+    # 7) Регіструємо загальний навігаційний роутер (group=1)
     register_navigation_handlers(app)
 
     # 8) Запускаємо webhook
