@@ -1,8 +1,7 @@
 # modules/handlers/navigation.py
 
-import re
 import sqlite3
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes,
@@ -11,25 +10,18 @@ from telegram.ext import (
 from modules.config import DB_NAME
 from modules.callbacks import CB
 from modules.keyboards import (
-    PROVIDERS,
-    PAYMENTS,
     nav_buttons,
-    provider_buttons,
-    payment_buttons,
     admin_panel_kb
 )
 from modules.states import (
     STEP_MENU,
-    STEP_DEPOSIT_AMOUNT,
-    STEP_WITHDRAW_AMOUNT,
-    STEP_REG_NAME,
     STEP_ADMIN_SEARCH,
     STEP_ADMIN_BROADCAST
 )
 from .start import start_command
 from .admin import show_admin_panel
 
-# === Ініціалізація таблиці threads (якщо потрібно) ===
+# === Ініціалізація таблиці threads (за потреби для збереження base_msg_id) ===
 def _init_threads():
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
@@ -40,7 +32,7 @@ def _init_threads():
         """)
         conn.commit()
 
-# === Основна логіка меню (Роутер для всіх callback_query) ===
+# === Основна логіка меню (роутер для всіх callback_query, group=1) ===
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
@@ -54,27 +46,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data in (CB.HOME.value, CB.BACK.value):
         return await start_command(update, context)
 
-    # ─── Поповнення ───
-    if data == CB.DEPOSIT_START.value:
-        await query.message.reply_text(
-            "💸 Введіть суму для поповнення:", reply_markup=nav_buttons()
-        )
-        return STEP_DEPOSIT_AMOUNT
-
-    # ─── Виведення коштів ───
-    if data == CB.WITHDRAW_START.value:
-        await query.message.reply_text(
-            "💳 Введіть суму для виведення:", reply_markup=nav_buttons()
-        )
-        return STEP_WITHDRAW_AMOUNT
-
-    # ─── Реєстрація ───
-    if data == "register":
-        await query.message.reply_text(
-            "📝 Введіть ваше ім’я:", reply_markup=nav_buttons()
-        )
-        return STEP_REG_NAME
-
     # ─── Допомога ───
     if data == CB.HELP.value:
         await query.message.reply_text(
@@ -85,26 +56,28 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ─── Адмін: пошук користувача ───
     if data == CB.ADMIN_SEARCH.value:
+        # Вхід у ConversationHandler для пошуку
         return STEP_ADMIN_SEARCH
 
     # ─── Адмін: розсилка ───
     if data == CB.ADMIN_BROADCAST.value:
+        # Вхід у ConversationHandler для розсилки
         return STEP_ADMIN_BROADCAST
 
-    # ─── Якщо нічого не збіглось ───
+    # ─── Якщо нічого не збіглося ─── повертаємо користувача до головного меню
     return await start_command(update, context)
 
 # === Реєструємо загальний роутер у групі 1 ===
 def register_navigation_handlers(app: Application):
     _init_threads()
 
-    # Обробка кнопок “home” та “back” (реакція на аналогічні callback_data)
+    # Обробка кнопок “home” та “back”
     app.add_handler(
-        CallbackQueryHandler(start_command, pattern="^home$"),
+        CallbackQueryHandler(start_command, pattern=f"^{CB.HOME.value}$"),
         group=1
     )
     app.add_handler(
-        CallbackQueryHandler(start_command, pattern="^back$"),
+        CallbackQueryHandler(start_command, pattern=f"^{CB.BACK.value}$"),
         group=1
     )
 
