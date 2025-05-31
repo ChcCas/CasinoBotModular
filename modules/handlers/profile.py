@@ -82,5 +82,6 @@ profile_conv = ConversationHandler(
 def register_profile_handlers(app: Application) -> None:
     """
     Реєструє ConversationHandler для сценарію профілю.
+    Менша група (0) дає пріоритет цьому конвеєру над загальним роутером.
     """
-    app.add_handler(profile_conv, group=1)
+    app.add_handler(profile_conv, group=0)
