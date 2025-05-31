@@ -1,125 +1,174 @@
 # modules/db.py
 
 import sqlite3
+from sqlite3 import Connection
+from typing import Optional, Dict, List
 from modules.config import DB_NAME, BOT_INSTANCE
+from telegram import ParseMode
 
-def init_db():
+def get_connection() -> Connection:
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db() -> None:
     """
-    Створює всі необхідні таблиці у SQLite (clients, deposits, withdrawals, registrations).
-    Викликається один раз при запуску бота.
+    Створює таблиці, якщо їх ще немає:
+      - clients(user_id INTEGER PRIMARY KEY, card TEXT UNIQUE, phone TEXT)
+      - deposits(...)
+      - withdrawals(...)
+      - registrations(...)
     """
-    with sqlite3.connect(DB_NAME) as conn:
-        cursor = conn.cursor()
+    conn = get_connection()
+    cursor = conn.cursor()
 
-        # Таблиця клієнтів (в ній зберігаємо user_id, картку та телефон)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS clients (
-            user_id   INTEGER PRIMARY KEY,
-            card      TEXT,
-            phone     TEXT
-        )
-        """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS clients (
+        user_id INTEGER PRIMARY KEY,
+        card    TEXT UNIQUE,
+        phone   TEXT
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS deposits (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id        INTEGER,
+        username       TEXT,
+        amount         REAL,
+        provider       TEXT,
+        payment_method TEXT,
+        file_type      TEXT,
+        file_id        TEXT,
+        timestamp      DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS withdrawals (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id   INTEGER,
+        username  TEXT,
+        amount    REAL,
+        method    TEXT,
+        details   TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS registrations (
+        user_id   INTEGER PRIMARY KEY,
+        name      TEXT,
+        phone     TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+    conn.commit()
+    conn.close()
 
-        # Таблиця депозитів
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS deposits (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id         INTEGER,
-            username        TEXT,
-            amount          REAL,
-            provider        TEXT,
-            payment_method  TEXT,
-            file_type       TEXT,
-            file_id         TEXT,
-            timestamp       DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-
-        # Таблиця виведень
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS withdrawals (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id   INTEGER,
-            username  TEXT,
-            amount    REAL,
-            method    TEXT,
-            details   TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-
-        # Таблиця реєстрацій (якщо потрібна)
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS registrations (
-            user_id INTEGER PRIMARY KEY,
-            name    TEXT,
-            phone   TEXT,
-            code    TEXT
-        )
-        """)
-        conn.commit()
-
-def search_user(query):
+def search_user(query: str) -> Optional[Dict]:
     """
-    Шукає клієнта у таблиці clients.
-    Аргумент query може бути рядком, який:
-      - або приводиться до int і шукається як user_id,
-      - або використовується як картка у WHERE card = ?
-    Повертає dict із ключами user_id, card, phone або None, якщо не знайдено.
+    Шукає клієнта:
+    - Якщо query складається лише з цифр і відповідає user_id → шукаємо за user_id.
+    - Інакше → шукаємо за card (точна відповідність).
+    Повертає словник { 'user_id', 'card', 'phone' } або None.
     """
-    with sqlite3.connect(DB_NAME) as conn:
-        cursor = conn.cursor()
+    conn = get_connection()
+    cursor = conn.cursor()
 
-        # Спроба інтерпретувати query як user_id
-        try:
-            user_id = int(query)
-            cursor.execute("SELECT user_id, card, phone FROM clients WHERE user_id = ?", (user_id,))
-            row = cursor.fetchone()
-            if row:
-                return {"user_id": row[0], "card": row[1], "phone": row[2]}
-        except (ValueError, TypeError):
-            pass
-
-        # Пошук за номером картки
-        cursor.execute("SELECT user_id, card, phone FROM clients WHERE card = ?", (query,))
+    # Спроби інтерпретувати як user_id
+    if query.isdigit():
+        cursor.execute("SELECT user_id, card, phone FROM clients WHERE user_id = ?", (int(query),))
         row = cursor.fetchone()
         if row:
-            return {"user_id": row[0], "card": row[1], "phone": row[2]}
+            conn.close()
+            return dict(row)
 
-    return None
+    # Інакше шукаємо за карткою
+    cursor.execute("SELECT user_id, card, phone FROM clients WHERE card = ?", (query,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
-def authorize_card(user_id, card):
+def authorize_card(user_id: int, card: str) -> None:
     """
-    Зберігає підтверджену картку для клієнта в базі.
-    Якщо запис з user_id вже є — оновлює поле card.
-    Інакше — створює новий запис.
+    Додає або оновлює запис user_id → card у clients.
+    Якщо запису не було, створюємо. Якщо був — оновлюємо поле card.
     """
-    with sqlite3.connect(DB_NAME) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT user_id FROM clients WHERE user_id = ?", (user_id,))
-        exists = cursor.fetchone()
-        if exists:
-            cursor.execute("UPDATE clients SET card = ? WHERE user_id = ?", (card, user_id))
-        else:
-            cursor.execute("INSERT INTO clients (user_id, card) VALUES (?, ?)", (user_id, card))
-        conn.commit()
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM clients WHERE user_id = ?", (user_id,))
+    exists = cursor.fetchone()
 
-def broadcast_to_all(text):
+    if exists:
+        cursor.execute(
+            "UPDATE clients SET card = ? WHERE user_id = ?",
+            (card, user_id)
+        )
+    else:
+        cursor.execute(
+            "INSERT INTO clients(user_id, card) VALUES (?, ?)",
+            (user_id, card)
+        )
+    conn.commit()
+    conn.close()
+
+def get_user_history(user_id: int) -> List[Dict]:
     """
-    Розсилка повідомлення text всім користувачам із таблиці clients.
-    Використовує глобальний BOT_INSTANCE (створюється у main.py після app = ApplicationBuilder().build()).
+    Повертає список операцій (депозитів та виведень) для конкретного user_id.
+    Формує список словників з полями:
+      { 'type': 'deposit'/'withdrawal', 'amount':..., 'provider' or 'method':..., 'timestamp':... }
+    Обмежимо 10 останніми записами, впорядковано за timestamp DESC.
     """
-    if BOT_INSTANCE is None:
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Обираємо останні 10 депозитів
+    cursor.execute("""
+      SELECT 'deposit' AS type, amount, provider AS info, timestamp
+      FROM deposits
+      WHERE user_id = ?
+      ORDER BY timestamp DESC
+      LIMIT 10
+    """, (user_id,))
+    deposits = [dict(row) for row in cursor.fetchall()]
+
+    # Обираємо останні 10 виведень
+    cursor.execute("""
+      SELECT 'withdrawal' AS type, amount, method AS info, timestamp
+      FROM withdrawals
+      WHERE user_id = ?
+      ORDER BY timestamp DESC
+      LIMIT 10
+    """, (user_id,))
+    withdrawals = [dict(row) for row in cursor.fetchall()]
+
+    conn.close()
+
+    # Об’єднуємо два списки, сортуємо за timestamp DESC, лишаємо максимум 10 записів
+    combined = deposits + withdrawals
+    combined.sort(key=lambda x: x["timestamp"], reverse=True)
+    return combined[:10]
+
+def broadcast_to_all(text: str) -> None:
+    """
+    Надсилає text усім user_id із таблиці clients.
+    Використовує глобальний BOT_INSTANCE (має бути ініціалізований у main.py).
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id FROM clients")
+    user_ids = [row["user_id"] for row in cursor.fetchall()]
+    conn.close()
+
+    bot = BOT_INSTANCE
+    if bot is None:
         return
 
-    with sqlite3.connect(DB_NAME) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT user_id FROM clients")
-        all_users = cursor.fetchall()
-
-    for (user_id,) in all_users:
+    for uid in user_ids:
         try:
-            BOT_INSTANCE.send_message(chat_id=user_id, text=text)
+            bot.send_message(
+                chat_id=uid,
+                text=text,
+                parse_mode=ParseMode.HTML
+            )
         except Exception:
-            # Ігноруємо помилки, наприклад, якщо користувач заблокував бота
-            pass
+            continue
