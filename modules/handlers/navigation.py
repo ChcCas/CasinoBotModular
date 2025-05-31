@@ -18,7 +18,6 @@ from modules.states import (
 from .start import start_command
 from .admin import show_admin_panel
 
-# === 1) Ініціалізація таблиці threads (за потреби) ===
 def _init_threads():
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
@@ -29,36 +28,32 @@ def _init_threads():
         """)
         conn.commit()
 
-# === 2) Основна логіка меню (роутер для всіх callback_query) ===
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
     await query.answer()
 
-    # ─── 2.1 Якщо це саме “client_profile” або “client_find” —
-    #      повертаємо None, щоб ConversationHandler профілю спрацював раніше (group=0).
+    # 1) Якщо це «client_profile» або «client_find» → даємо можливість profile_conv спрацювати
     if data in (CB.CLIENT_PROFILE.value, CB.CLIENT_FIND.value):
         return None
 
-    # ─── 2.2 Якщо це “deposit_start” або “withdraw_start” —
-    #      повертаємо None, щоб відповідний ConversationHandler (депозит/виведення) спрацював.
+    # 2) Якщо це «deposit_start» або «withdraw_start» → даємо можливість відповідному ConvHandler спрацювати
     if data in (CB.DEPOSIT_START.value, CB.WITHDRAW_START.value):
         return None
 
-    # ─── 2.3 Адмін-панель ───
-    if data == "admin_panel":
+    # 3) Адмін-панель
+    if data == CB.ADMIN_PANEL.value:
         return await show_admin_panel(update, context)
 
-    # ─── 2.4 Повернення «додому» або «назад» ───
+    # 4) «Назад» / «Головне меню»
     if data in (CB.HOME.value, CB.BACK.value):
         return await start_command(update, context)
 
-    # ─── 2.5 Реєстрація (якщо є окремий сценарій) ───
+    # 5) Реєстрація
     if data == CB.REGISTER.value:
-        # Якщо у вас є окремий ConversationHandler для “register”, він спрацює.
-        return None
+        return None  # нехай Registration ConvHandler спрацює
 
-    # ─── 2.6 Допомога ───
+    # 6) Допомога
     if data == CB.HELP.value:
         await query.message.reply_text(
             "ℹ️ Допомога:\n"
@@ -68,24 +63,21 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return STEP_MENU
 
-    # ─── 2.7 Адмін: пошук користувача ───
+    # 7) Адмін: Пошук користувача
     if data == CB.ADMIN_SEARCH.value:
-        # Входимо у відповідний ConversationHandler, який ловить STEP_ADMIN_SEARCH
         return STEP_ADMIN_SEARCH
 
-    # ─── 2.8 Адмін: розсилка ───
+    # 8) Адмін: Розсилка
     if data == CB.ADMIN_BROADCAST.value:
-        # Входимо у відповідний ConversationHandler, який ловить STEP_ADMIN_BROADCAST
         return STEP_ADMIN_BROADCAST
 
-    # ─── 2.9 Якщо жоден з вище перелічених — повертаємо користувача до /start ───
+    # 9) Якщо нічого не збіглося — повернути в /start
     return await start_command(update, context)
 
-# === 3) Реєструємо загальний роутер у групі 1 ===
 def register_navigation_handlers(app: Application):
     _init_threads()
 
-    # 3.1 Обробляємо кнопки “home” та “back” окремо (щоб точно повернутися в /start)
+    # Спершу ловимо “home” / “back” (щоб повернутися до /start)
     app.add_handler(
         CallbackQueryHandler(start_command, pattern=f"^{CB.HOME.value}$"),
         group=1
@@ -95,7 +87,7 @@ def register_navigation_handlers(app: Application):
         group=1
     )
 
-    # 3.2 Основний menu_handler ловить усі інші callback_query
+    # Далі — усі інші CallbackQuery → menu_handler
     app.add_handler(
         CallbackQueryHandler(menu_handler, pattern=".*"),
         group=1
