@@ -12,7 +12,7 @@ from modules.handlers.profile import register_profile_handlers
 from modules.handlers.deposit import register_deposit_handlers
 from modules.handlers.withdraw import register_withdraw_handlers
 from modules.handlers.navigation import register_navigation_handlers
-from modules.register_routes import register_routes  # register_routes.py тепер у modules/
+from modules.register_routes import register_routes  # Файл modules/register_routes.py
 
 # ─── Налаштування логування ───────────────────────────────────────────────────
 logging.basicConfig(
@@ -32,7 +32,7 @@ def main():
     # 2) Створюємо Telegram Application
     app_tg = ApplicationBuilder().token(TOKEN).build()
 
-    # 3) Зберігаємо BOT_INSTANCE для broadcast_to_all
+    # 3) Зберігаємо BOT_INSTANCE для broadcast_to_all (якщо використовується)
     import modules.config as config_module
     config_module.BOT_INSTANCE = app_tg.bot
 
@@ -51,11 +51,15 @@ def main():
     # 7) Регіструємо загальний навігаційний роутер (group=1)
     register_navigation_handlers(app_tg)
 
-    # 8) Створюємо Flask-додаток і реєструємо маршрути
+    # 8) Створюємо Flask-додаток, ввімкнувши логування werkzeug, й реєструємо маршрути
     flask_app = Flask(__name__)
+    # Увімкнути докладне логування HTTP-запитів Flask
+    logging.getLogger('werkzeug').setLevel(logging.DEBUG)
+
     register_routes(flask_app, app_tg)
 
     # 9) Запускаємо Flask-сервер
+    #    Використовуємо host="0.0.0.0" і цей PORT (повинен відповідати порту в WEBHOOK_URL)
     flask_app.run(host="0.0.0.0", port=PORT)
 
 if __name__ == "__main__":
