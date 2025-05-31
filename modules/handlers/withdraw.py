@@ -1,192 +1,151 @@
-# modules/handlers/withdraw.py
-
+import re
 import sqlite3
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest
 from telegram.ext import (
+    ConversationHandler,
     CallbackQueryHandler,
     MessageHandler,
-    ConversationHandler,
     filters,
     ContextTypes,
-    Application
+    Application,
 )
-from modules.config import DB_NAME
+from modules.config import ADMIN_ID, DB_NAME
+from modules.keyboards import PAYMENTS, nav_buttons, payment_buttons
 from modules.callbacks import CB
-from modules.keyboards import nav_buttons, payment_buttons, PAYMENTS
 from modules.states import (
     STEP_WITHDRAW_AMOUNT,
     STEP_WITHDRAW_METHOD,
     STEP_WITHDRAW_DETAILS,
-    STEP_WITHDRAW_CONFIRM
+    STEP_WITHDRAW_CONFIRM,
+    STEP_MENU,
 )
 
-async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Користувач натиснув “💸 Вивести кошти” (callback_data="withdraw_start").
-    Просимо ввести суму для виведення.
-    """
+async def process_withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обробник натискання “💸 Вивести кошти” (callback_data="withdraw_start")."""
     await update.callback_query.answer()
-    text = "💳 Введіть суму для виведення:"
     sent = await update.callback_query.message.reply_text(
-        text,
+        "💳 Введіть суму для виведення:",
         reply_markup=nav_buttons()
     )
     context.user_data["base_msg_id"] = sent.message_id
     return STEP_WITHDRAW_AMOUNT
 
 async def process_withdraw_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Користувач увів суму виведення.
-    Якщо помилка конвертації — просимо повторити.
-    Інакше — зберігаємо суму і переходимо до вибору методу.
-    """
-    text_in = update.message.text.strip()
+    """Обробник — користувач ввів суму для виведення."""
     try:
-        amount = float(text_in)
+        amount = float(update.message.text.strip())
     except ValueError:
-        base_id = context.user_data.get("base_msg_id")
-        if base_id:
-            try:
-                await context.bot.edit_message_text(
-                    chat_id=update.effective_chat.id,
-                    message_id=base_id,
-                    text="❗️ Невірний формат суми. Введіть число (наприклад, 100):",
-                    reply_markup=nav_buttons()
-                )
-            except BadRequest as e:
-                # Якщо нічого фактично не змінилося або повідомлення видалене — надсилаємо нове
-                msg = str(e)
-                if "Message is not modified" not in msg and "Message to edit not found" not in msg:
-                    raise
+        await update.message.reply_text(
+            "❗️ Введіть коректну суму (число):",
+            reply_markup=nav_buttons()
+        )
         return STEP_WITHDRAW_AMOUNT
 
     context.user_data["withdraw_amount"] = amount
-    base_id = context.user_data.get("base_msg_id")
-    if base_id:
-        try:
-            await context.bot.edit_message_text(
-                chat_id=update.effective_chat.id,
-                message_id=base_id,
-                text="💳 Оберіть метод виведення:",
-                reply_markup=payment_buttons()
-            )
-        except BadRequest as e:
-            msg = str(e)
-            if "Message is not modified" not in msg and "Message to edit not found" not in msg:
-                raise
+    sent = await update.message.reply_text(
+        "🛡 Оберіть метод виведення:",
+        reply_markup=payment_buttons()
+    )
+    context.user_data["base_msg_id"] = sent.message_id
     return STEP_WITHDRAW_METHOD
 
 async def process_withdraw_method(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Користувач обрав метод виведення (callback_data ∈ PAYMENTS).
-    Зберігаємо його і просимо ввести деталі (номер картки або гаманець).
-    """
+    """Обробник вибору методу виведення (callback_data = один із PAYMENTS)."""
     await update.callback_query.answer()
     method = update.callback_query.data
     context.user_data["withdraw_method"] = method
 
-    base_id = context.user_data.get("base_msg_id")
-    if base_id:
-        try:
-            await context.bot.edit_message_text(
-                chat_id=update.effective_chat.id,
-                message_id=base_id,
-                text="💳 Введіть реквізити (номер картки або гаманець):",
-                reply_markup=nav_buttons()
-            )
-        except BadRequest as e:
-            msg = str(e)
-            if "Message is not modified" not in msg and "Message to edit not found" not in msg:
-                raise
+    sent = await update.callback_query.message.reply_text(
+        "💬 Введіть реквізити (номер картки або гаманець):",
+        reply_markup=nav_buttons()
+    )
+    context.user_data["base_msg_id"] = sent.message_id
     return STEP_WITHDRAW_DETAILS
 
 async def process_withdraw_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Користувач ввів свої реквізити (текст).
-    Зберігаємо їх і показуємо кнопку «Підтвердити».
-    """
+    """Обробник — користувач ввів свої реквізити/деталі."""
     details = update.message.text.strip()
     context.user_data["withdraw_details"] = details
 
-    kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton("✅ Підтвердити", callback_data=CB.WITHDRAW_CONFIRM.value)
-    ]])
-    base_id = context.user_data.get("base_msg_id")
-    if base_id:
-        try:
-            await context.bot.edit_message_text(
-                chat_id=update.effective_chat.id,
-                message_id=base_id,
-                text="✅ Натисніть «Підтвердити», щоб завершити:",
-                reply_markup=kb
-            )
-        except BadRequest as e:
-            msg = str(e)
-            if "Message is not modified" not in msg and "Message to edit not found" not in msg:
-                raise
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Підтвердити", callback_data=CB.WITHDRAW_CONFIRM.value)],
+        [InlineKeyboardButton("◀️ Назад",       callback_data=CB.BACK.value)],
+        [InlineKeyboardButton("🏠 Головне меню", callback_data=CB.HOME.value)],
+    ])
+    sent = await update.message.reply_text(
+        "✅ Якщо все вірно, натисніть “Підтвердити”:",
+        reply_markup=kb
+    )
+    context.user_data["base_msg_id"] = sent.message_id
     return STEP_WITHDRAW_CONFIRM
 
-async def confirm_withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Користувач натиснув «Підтвердити» (callback_data="withdraw_confirm").
-    Зберігаємо запис у таблицю withdrawals і показуємо повідомлення про успішне
-    створення замовлення на виведення.
-    """
+async def process_withdraw_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обробник натискання “✅ Підтвердити” (callback_data="withdraw_confirm")."""
     await update.callback_query.answer()
     user = update.effective_user
-    amount  = context.user_data.get("withdraw_amount")
-    method  = context.user_data.get("withdraw_method")
-    details = context.user_data.get("withdraw_details")
 
+    amount   = context.user_data.get("withdraw_amount")
+    method   = context.user_data.get("withdraw_method")
+    details  = context.user_data.get("withdraw_details")
+
+    # Зберігаємо в БД
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute(
-            """
-            INSERT INTO withdrawals
-              (user_id, username, amount, method, details)
-            VALUES (?, ?, ?, ?, ?)
-            """,
+            "INSERT INTO withdrawals (user_id, username, amount, method, details) "
+            "VALUES (?, ?, ?, ?, ?)",
             (user.id, user.username, amount, method, details)
         )
         conn.commit()
 
+    text = "📄 Запит на виведення збережено! Очікуйте підтвердження від адміністратора."
+    keyboard = nav_buttons()
+
     base_id = context.user_data.get("base_msg_id")
-    final_text = "💸 Ваше замовлення на виведення отримано. Очікуйте обробки."
     if base_id:
         try:
             await context.bot.edit_message_text(
                 chat_id=update.effective_chat.id,
                 message_id=base_id,
-                text=final_text,
-                reply_markup=nav_buttons()
+                text=text,
+                reply_markup=keyboard
             )
         except BadRequest as e:
-            msg = str(e)
-            if "Message is not modified" not in msg and "Message to edit not found" not in msg:
+            if "Message to edit not found" in str(e) or "Message is not modified" in str(e):
+                sent = await update.callback_query.message.reply_text(
+                    text,
+                    reply_markup=keyboard
+                )
+                context.user_data["base_msg_id"] = sent.message_id
+            else:
                 raise
+    else:
+        sent = await update.callback_query.message.reply_text(
+            text,
+            reply_markup=keyboard
+        )
+        context.user_data["base_msg_id"] = sent.message_id
 
-    context.user_data.pop("base_msg_id", None)
-    return ConversationHandler.END
-
-withdraw_conv = ConversationHandler(
-    entry_points=[
-        CallbackQueryHandler(withdraw_start, pattern=f"^{CB.WITHDRAW_START.value}$")
-    ],
-    states={
-        STEP_WITHDRAW_AMOUNT:  [MessageHandler(filters.TEXT & ~filters.COMMAND, process_withdraw_amount)],
-        STEP_WITHDRAW_METHOD:  [CallbackQueryHandler(process_withdraw_method, pattern="^(" + "|".join(PAYMENTS) + ")$")],
-        STEP_WITHDRAW_DETAILS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_withdraw_details)],
-        STEP_WITHDRAW_CONFIRM: [CallbackQueryHandler(confirm_withdraw, pattern=f"^{CB.WITHDRAW_CONFIRM.value}$")],
-    },
-    fallbacks=[
-        CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.BACK.value}$"),
-        CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.HOME.value}$"),
-    ],
-    per_chat=True,
-)
+    return STEP_MENU
 
 def register_withdraw_handlers(app: Application) -> None:
     """
-    Регіструє ConversationHandler для сценарію виведення (група 0).
+    Регіструє ConversationHandler для сценарію виведення коштів.
     """
+    withdraw_conv = ConversationHandler(
+        entry_points=[
+            CallbackQueryHandler(process_withdraw_start, pattern=f"^{CB.WITHDRAW_START.value}$")
+        ],
+        states={
+            STEP_WITHDRAW_AMOUNT:  [MessageHandler(filters.TEXT & ~filters.COMMAND, process_withdraw_amount)],
+            STEP_WITHDRAW_METHOD:  [CallbackQueryHandler(process_withdraw_method, pattern="^(" + "|".join(PAYMENTS) + ")$")],
+            STEP_WITHDRAW_DETAILS: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_withdraw_details)],
+            STEP_WITHDRAW_CONFIRM: [CallbackQueryHandler(process_withdraw_confirm, pattern=f"^{CB.WITHDRAW_CONFIRM.value}$")],
+        },
+        fallbacks=[
+            CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.BACK.value}$"),
+            CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.HOME.value}$"),
+        ],
+        per_chat=True,
+    )
     app.add_handler(withdraw_conv, group=0)
