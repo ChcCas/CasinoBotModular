@@ -23,13 +23,13 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.error("При обробці оновлення трапилася помилка:", exc_info=context.error)
 
 def main():
-    # 1) Ініціалізуємо БД (створюємо таблиці, якщо їх немає)
+    # 1) Ініціалізуємо БД
     init_db()
 
-    # 2) Створюємо Telegram Application із токеном
+    # 2) Створюємо Telegram Application
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # 3) Записуємо глобальний BOT_INSTANCE у modules/config.py (для broadcast_to_all)
+    # 3) Зберігаємо BOT_INSTANCE для broadcast_to_all
     import modules.config as config_module
     config_module.BOT_INSTANCE = app.bot
 
@@ -48,7 +48,7 @@ def main():
     # 7) Регіструємо загальний навігаційний роутер (група 1)
     register_navigation_handlers(app)
 
-    # 8) Запускаємо бот у режимі webhook
+    # 8) Запускаємо webhook
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
