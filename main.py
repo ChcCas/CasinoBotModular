@@ -8,15 +8,10 @@ from modules.db import init_db
 
 from modules.handlers.start import register_start_handler
 from modules.handlers.admin import register_admin_handlers
-from modules.handlers.profile import profile_conv
-from modules.handlers.deposit import deposit_conv
-from modules.handlers.withdraw import withdraw_conv
-from modules.handlers.registration import registration_conv
-from modules.handlers.admin import (
-    admin_search_conv,
-    admin_broadcast_conv,
-    show_admin_panel  # якщо десь потребується
-)
+from modules.handlers.profile import register_profile_handlers
+from modules.handlers.deposit import register_deposit_handlers
+from modules.handlers.withdraw import register_withdraw_handlers
+# Видалено: з файлу registration.py, оскільки такого немає
 from modules.handlers.navigation import register_navigation_handlers
 
 # ─── Налаштування логування ───────────────────────────────────────────────────
@@ -26,37 +21,32 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ─── Глобальний error handler ─────────────────────────────────────────────────
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.error("Exception while handling update:", exc_info=context.error)
 
+# ─── Точка входу ────────────────────────────────────────────────────────────────
 def main():
-    # 1) ініціалізуємо БД
+    # 1) Ініціалізуємо базу даних (створюємо таблиці, якщо їх немає)
     init_db()
 
-    # 2) створюємо Application
+    # 2) Створюємо Telegram Application із токеном
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_error_handler(error_handler)
 
-    # 3) Реєструємо /start та адмінські хендлери, що не вимагають розмов
+    # 3) Реєструємо /start та адмін-хендлери (групи 0 і 1 діляться всередині)
     register_start_handler(app)
-    # Реєструємо show_admin_panel (callback admin_panel):
-    # відпрацює, якщо жоден група 0 його не «пощупала».
     register_admin_handlers(app)
 
-    # 4) Регіструємо всі ConversationHandler’и у групі 0 (пріоритетніше за menu_router)
-    app.add_handler(profile_conv, group=0)
-    app.add_handler(deposit_conv, group=0)
-    app.add_handler(withdraw_conv, group=0)
-    app.add_handler(registration_conv, group=0)
+    # 4) Реєструємо клієнтські ConversationHandler’и (група 0)
+    register_profile_handlers(app)
+    register_deposit_handlers(app)
+    register_withdraw_handlers(app)
 
-    # Адмінські ConversationHandler’и (пошук і розсилка)
-    app.add_handler(admin_search_conv, group=0)
-    app.add_handler(admin_broadcast_conv, group=0)
-
-    # 5) Нарешті додаємо загальний router у групі 1
+    # 5) Реєструємо загальний роутер кнопок (home/back/help тощо, group=1)
     register_navigation_handlers(app)
 
-    # 6) Запускаємо Webhook
+    # 6) Запускаємо бот у режимі webhook
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
