@@ -11,36 +11,44 @@ from modules.handlers.deposit import register_deposit_handlers
 from modules.handlers.withdraw import register_withdraw_handlers
 from modules.handlers.navigation import register_navigation_handlers
 
+# ─── Налаштування логування ───────────────────────────────────────────────────
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
+# ─── Глобальний error handler ─────────────────────────────────────────────────
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.error("При обробці оновлення трапилася помилка:", exc_info=context.error)
 
 def main():
+    # 1) Ініціалізуємо БД (створюємо таблиці, якщо їх немає)
     init_db()
 
+    # 2) Створюємо Telegram Application із токеном
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Записуємо global BOT_INSTANCE у modules/config.py:
+    # 3) Записуємо глобальний BOT_INSTANCE у modules/config.py (для broadcast_to_all)
     import modules.config as config_module
     config_module.BOT_INSTANCE = app.bot
 
+    # 4) Додаємо глобальний обробник помилок
     app.add_error_handler(error_handler)
 
-    # Група 0: /start та всі ConversationHandler-и (адмін, профіль, депозит, виведення)
+    # 5) Регіструємо /start та адмінські хендлери (група 0)
     register_start_handler(app)
     register_admin_handlers(app)
+
+    # 6) Регіструємо клієнтські ConversationHandler-и (група 0)
     register_profile_handlers(app)
     register_deposit_handlers(app)
     register_withdraw_handlers(app)
 
-    # Група 1: загальний навігаційний роутер
+    # 7) Регіструємо загальний навігаційний роутер (група 1)
     register_navigation_handlers(app)
 
+    # 8) Запускаємо бот у режимі webhook
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
