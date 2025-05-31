@@ -33,16 +33,16 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_error_handler(error_handler)
 
-    # 3) Реєструємо /start та адмін-хендлери
+    # 3) Реєструємо /start та адмін-хендлери (group=0 і group=1 всередині)
     register_start_handler(app)
     register_admin_handlers(app)
 
-    # 4) Регіструємо клієнтські ConversationHandler’и (група 0)
+    # 4) Регіструємо клієнтські ConversationHandler’и (group=0)
     register_profile_handlers(app)
     register_deposit_handlers(app)
     register_withdraw_handlers(app)
 
-    # 5) Регіструємо загальний роутер кнопок (home/back/help тощо, група 1)
+    # 5) Регіструємо загальний роутер кнопок (home/back/help тощо, group=1)
     register_navigation_handlers(app)
 
     # 6) Запускаємо бот у режимі webhook
