@@ -1,7 +1,4 @@
-# main.py
-
 import logging
-from flask import Flask
 from telegram.ext import ApplicationBuilder, ContextTypes
 
 from modules.config import TOKEN, WEBHOOK_URL, PORT
@@ -12,7 +9,6 @@ from modules.handlers.profile import register_profile_handlers
 from modules.handlers.deposit import register_deposit_handlers
 from modules.handlers.withdraw import register_withdraw_handlers
 from modules.handlers.navigation import register_navigation_handlers
-from modules.register_routes import register_routes  # Файл modules/register_routes.py
 
 # ─── Налаштування логування ───────────────────────────────────────────────────
 logging.basicConfig(
@@ -26,41 +22,35 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.error("При обробці оновлення трапилася помилка:", exc_info=context.error)
 
 def main():
-    # 1) Ініціалізуємо БД
+    # 1) Ініціалізуємо БД (створюємо таблиці, якщо їх немає)
     init_db()
 
-    # 2) Створюємо Telegram Application
-    app_tg = ApplicationBuilder().token(TOKEN).build()
+    # 2) Створюємо Telegram Application із токеном
+    app = ApplicationBuilder().token(TOKEN).build()
 
-    # 3) Зберігаємо BOT_INSTANCE для broadcast_to_all (якщо використовується)
-    import modules.config as config_module
-    config_module.BOT_INSTANCE = app_tg.bot
+    # 3) Додаємо глобальний обробник помилок
+    app.add_error_handler(error_handler)
 
-    # 4) Додаємо глобальний обробник помилок
-    app_tg.add_error_handler(error_handler)
+    # 4) Регіструємо /start та адмін-хендлери (група=0)
+    register_start_handler(app)
+    register_admin_handlers(app)
 
-    # 5) Регіструємо /start та адмінські хендлери (group=0)
-    register_start_handler(app_tg)
-    register_admin_handlers(app_tg)
+    # 5) Регіструємо клієнтські ConversationHandler-и (група=0)
+    register_profile_handlers(app)
+    register_deposit_handlers(app)
+    register_withdraw_handlers(app)
 
-    # 6) Регіструємо клієнтські ConversationHandler-и (group=0)
-    register_profile_handlers(app_tg)
-    register_deposit_handlers(app_tg)
-    register_withdraw_handlers(app_tg)
+    # 6) Регіструємо загальний роутер кнопок (home/back/help тощо, група=1)
+    register_navigation_handlers(app)
 
-    # 7) Регіструємо загальний навігаційний роутер (group=1)
-    register_navigation_handlers(app_tg)
-
-    # 8) Створюємо Flask-додаток, ввімкнувши логування werkzeug, й реєструємо маршрути
-    flask_app = Flask(__name__)
-    # Увімкнути докладне логування HTTP-запитів Flask
-    logging.getLogger('werkzeug').setLevel(logging.DEBUG)
-
-    register_routes(flask_app, app_tg)
-
-    # 9) Запускаємо Flask-сервер
-    #    Використовуємо host="0.0.0.0" і цей PORT (повинен відповідати порту в WEBHOOK_URL)
-    flask_app.run(host="0.0.0.0", port=PORT)
+    # 7) Запускаємо бот у режимі webhook
+    #    Тут ми більше не використовуємо Flask; Telegram одразу шле запити на цей webhook.
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path="webhook",
+        webhook_url=WEBHOOK_URL,
+    )
 
 if __name__ == "__main__":
     main()
