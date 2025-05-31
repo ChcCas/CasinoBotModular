@@ -14,16 +14,53 @@ from modules.config import ADMIN_ID
 from modules.db import authorize_card, search_user
 from modules.keyboards import nav_buttons, client_menu
 from modules.callbacks import CB
-from modules.states import STEP_FIND_CARD_PHONE
+from modules.states import STEP_FIND_CARD_PHONE, STEP_MENU
 
 async def start_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     1) Користувач натиснув “💳 Мій профіль” (callback_data="client_profile").
-    2) Надсилаємо єдине повідомлення “Введіть номер вашої клубної картки:” + клавіатуру “Назад/Головне меню”.
-    3) Зберігаємо message_id у context.user_data["base_msg_id"].
+    2) Перевіряємо в БД: якщо вже є запис про цього user_id → користувач авторизований, 
+       редагуємо / надсилаємо повідомлення з інформацією та клавіатурою для авторизованого користувача.
+    3) Якщо запису нема → запитуємо номер картки.
     """
     await update.callback_query.answer()
+    user_id = update.effective_user.id
+    user_record = search_user(str(user_id))  # шукаємо за user_id
 
+    if user_record and user_record.get("card"):
+        # Користувач вже авторизований: показуємо єдине повідомлення із меню авторизованого користувача
+        card = user_record["card"]
+        text = (
+            f"🎉 Ви вже авторизовані!\n"
+            f"Ваша картка: {card}\n\n"
+            "Оберіть дію:"
+        )
+        keyboard = client_menu(is_authorized=True)
+
+        # Якщо є base_msg_id — редагуємо його; інакше — надсилаємо нове повідомлення
+        base_id = context.user_data.get("base_msg_id")
+        if base_id:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=update.effective_chat.id,
+                    message_id=base_id,
+                    text=text,
+                    reply_markup=keyboard
+                )
+            except BadRequest as e:
+                # Ігноруємо помилку, якщо повідомлення не змінилося
+                if "Message is not modified" not in str(e):
+                    raise
+        else:
+            sent = await update.callback_query.message.reply_text(
+                text,
+                reply_markup=keyboard
+            )
+            context.user_data["base_msg_id"] = sent.message_id
+
+        return STEP_MENU
+
+    # Якщо користувача ще нема в БД (або нема картки) → запитуємо номер картки
     text = "💳 Введіть номер вашої клубної картки:"
     sent = await update.callback_query.message.reply_text(
         text,
@@ -34,18 +71,50 @@ async def start_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def find_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    1) Обробка введеного номера картки (MessageHandler).
-    2) Надсилаємо адміну повідомлення з кнопкою підтвердження:
-       callback_data = f"admin_confirm_card:{user_id}:{card}"
-    3) Редагуємо (або надсилаємо, якщо base_msg_id відсутній) повідомлення клієнта
-       з текстом “Ваш запит відправлено адміністратору. Очікуйте підтвердження.” + nav_buttons().
-    4) Очищаємо context.user_data["base_msg_id"] і завершуємо сценарій (ConversationHandler.END).
+    1) Користувач вводить номер картки (MessageHandler).
+    2) Перевіряємо одразу: чи вже є ця картка в БД (за унікальним номером)? 
+       - Якщо є запис із такою карткою, збережений раніше адміном → авторизуємо користувача одразу.
+       - Інакше → надсилаємо адміну повідомлення з кнопкою підтвердження. 
+    3) Повідомляємо клієнта, що запит відправлено адміністратору, якщо це нова картка.
+    4) Завершуємо сценарій.
     """
     card = update.message.text.strip()
     user_id = update.effective_user.id
     full_name = update.effective_user.full_name
 
-    # 1) Надсилаємо адміну запит із callback-посиланням для підтвердження
+    # Перевіряємо, чи вже існує в БД запис про цю картку
+    existing = search_user(card)  # шукаємо за номером картки
+    if existing:
+        # Якщо картка вже є (ймовірно, адмін підтвердив раніше) – авторизуємо
+        authorize_card(user_id, card)  # переконуємося, що user_id зберігся під цим card
+        text = f"🎉 Картка {card} знайдена в базі. Ви успішно авторизовані."
+        keyboard = client_menu(is_authorized=True)
+
+        # Редагуємо (або надсилаємо) єдине повідомлення
+        base_id = context.user_data.get("base_msg_id")
+        if base_id:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=update.effective_chat.id,
+                    message_id=base_id,
+                    text=text,
+                    reply_markup=keyboard
+                )
+            except BadRequest as e:
+                if "Message is not modified" not in str(e):
+                    raise
+        else:
+            sent = await update.message.reply_text(
+                text,
+                reply_markup=keyboard
+            )
+            context.user_data["base_msg_id"] = sent.message_id
+
+        # Завершуємо сценарій
+        context.user_data.pop("base_msg_id", None)
+        return ConversationHandler.END
+
+    # Якщо картки ще нема → надсилаємо адміну запит на підтвердження картки
     kb = InlineKeyboardMarkup([[
         InlineKeyboardButton(
             "✅ Підтвердити картку",
@@ -62,33 +131,31 @@ async def find_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=kb
     )
 
-    # 2) Редагуємо базове повідомлення клієнта (або надсилаємо нове, якщо base_msg_id відсутній)
+    # Інформуємо клієнта, що запит відправлено адміністратору
+    confirmation_text = "✅ Ваш запит відправлено адміністратору. Очікуйте підтвердження."
     base_id = context.user_data.get("base_msg_id")
-    new_text = "✅ Ваш запит відправлено адміністратору. Очікуйте підтвердження."
     if base_id:
         try:
             await context.bot.edit_message_text(
                 chat_id=update.effective_chat.id,
                 message_id=base_id,
-                text=new_text,
+                text=confirmation_text,
                 reply_markup=nav_buttons()
             )
         except BadRequest as e:
-            # Ігноруємо помилку, якщо повідомлення не змінилося
             if "Message is not modified" not in str(e):
                 raise
     else:
         sent = await update.message.reply_text(
-            new_text,
+            confirmation_text,
             reply_markup=nav_buttons()
         )
         context.user_data["base_msg_id"] = sent.message_id
 
-    # 3) Очищаємо base_msg_id, бо сценарій завершився
+    # Завершуємо сценарій та очищуємо base_msg_id
     context.user_data.pop("base_msg_id", None)
     return ConversationHandler.END
 
-# ─── ConversationHandler для сценарію “Мій профіль” ────────────────────────────
 profile_conv = ConversationHandler(
     entry_points=[
         CallbackQueryHandler(start_profile, pattern=f"^{CB.CLIENT_PROFILE.value}$")
@@ -99,8 +166,8 @@ profile_conv = ConversationHandler(
         ],
     },
     fallbacks=[
-        # Якщо клієнт натисне “Назад” або “Головне меню” під час уведення картки,
-        # завершуємо сценарій без помилок.
+        # Якщо клієнт натис «Назад» або «Головне меню» під час введення картки —
+        # завершуємо сценарій без помилок
         CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.BACK.value}$"),
         CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.HOME.value}$"),
     ],
@@ -109,7 +176,7 @@ profile_conv = ConversationHandler(
 
 def register_profile_handlers(app: Application) -> None:
     """
-    Регіструє profile_conv у групі 0, щоб цей ConversationHandler обробив  
-    callback_data="client_profile" раніше за загальний navigation handler.
+    Реєструє ConversationHandler для сценарію “Мій профіль” (група 0),
+    щоб обробити callback_data="client_profile" до загального навігаційного handler.
     """
     app.add_handler(profile_conv, group=0)
