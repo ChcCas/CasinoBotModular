@@ -4,7 +4,7 @@ import sqlite3
 from sqlite3 import Connection
 from typing import Optional, Dict, List
 from modules.config import DB_NAME, BOT_INSTANCE
-from telegram import ParseMode
+from telegram.constants import ParseMode   # <-- Замінили тут
 
 def get_connection() -> Connection:
     conn = sqlite3.connect(DB_NAME)
@@ -74,7 +74,7 @@ def search_user(query: str) -> Optional[Dict]:
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Спроби інтерпретувати як user_id
+    # Спроба інтерпретувати як user_id
     if query.isdigit():
         cursor.execute("SELECT user_id, card, phone FROM clients WHERE user_id = ?", (int(query),))
         row = cursor.fetchone()
@@ -115,13 +115,12 @@ def get_user_history(user_id: int) -> List[Dict]:
     """
     Повертає список операцій (депозитів та виведень) для конкретного user_id.
     Формує список словників з полями:
-      { 'type': 'deposit'/'withdrawal', 'amount':..., 'provider' or 'method':..., 'timestamp':... }
-    Обмежимо 10 останніми записами, впорядковано за timestamp DESC.
+      { 'type': 'deposit'/'withdrawal', 'amount':..., 'info':..., 'timestamp':... }
+    Повертає максимум 10 останніх записів, впорядкованих за timestamp DESC.
     """
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Обираємо останні 10 депозитів
     cursor.execute("""
       SELECT 'deposit' AS type, amount, provider AS info, timestamp
       FROM deposits
@@ -131,7 +130,6 @@ def get_user_history(user_id: int) -> List[Dict]:
     """, (user_id,))
     deposits = [dict(row) for row in cursor.fetchall()]
 
-    # Обираємо останні 10 виведень
     cursor.execute("""
       SELECT 'withdrawal' AS type, amount, method AS info, timestamp
       FROM withdrawals
@@ -143,7 +141,6 @@ def get_user_history(user_id: int) -> List[Dict]:
 
     conn.close()
 
-    # Об’єднуємо два списки, сортуємо за timestamp DESC, лишаємо максимум 10 записів
     combined = deposits + withdrawals
     combined.sort(key=lambda x: x["timestamp"], reverse=True)
     return combined[:10]
