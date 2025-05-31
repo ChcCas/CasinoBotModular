@@ -13,7 +13,8 @@ from telegram.ext import (
 )
 from modules.config import DB_NAME
 from modules.callbacks import CB
-from modules.keyboards import nav_buttons, provider_buttons, payment_buttons, PROVIDERS, PAYMENTS
+from modules.keyboards import nav_buttons, provider_buttons, payment_buttons
+from modules.keyboards import PROVIDERS, PAYMENTS
 from modules.states import (
     STEP_DEPOSIT_AMOUNT,
     STEP_DEPOSIT_PROVIDER,
@@ -22,33 +23,22 @@ from modules.states import (
     STEP_DEPOSIT_CONFIRM
 )
 
-# ─── МАПІНГ: від назв, які бачить користувач, до внутрішніх значень провайдерів ───
+# МАПІНГ від відображених назв до внутрішніх
 PROVIDER_MAPPING = {
     "СТАРА СИСТЕМА": "CHAMPION",
     "НОВА СИСТЕМА":  "SUPEROMATIC"
 }
 
 async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Користувач натиснув “💰 Поповнити” → просимо ввести суму.
-    """
     await update.callback_query.answer()
-
     text = "💸 Введіть суму для поповнення:"
     sent = await update.callback_query.message.reply_text(
-        text,
-        reply_markup=nav_buttons()
+        text, reply_markup=nav_buttons()
     )
     context.user_data["base_msg_id"] = sent.message_id
     return STEP_DEPOSIT_AMOUNT
 
 async def process_deposit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    1) Користувач увів суму. Перевіряємо конвертацію у float.
-       - Якщо невірно → показуємо помилку, лишаємося в STEP_DEPOSIT_AMOUNT.
-       - Інакше зберігаємо amount і переходимо до вибору провайдера.
-    2) Редагуємо повідомлення на “🎰 Оберіть провайдера” з клавіатурою provider_buttons().
-    """
     text_in = update.message.text.strip()
     try:
         amount = float(text_in)
@@ -68,7 +58,6 @@ async def process_deposit_amount(update: Update, context: ContextTypes.DEFAULT_T
         return STEP_DEPOSIT_AMOUNT
 
     context.user_data["deposit_amount"] = amount
-
     base_id = context.user_data.get("base_msg_id")
     if base_id:
         try:
@@ -84,18 +73,9 @@ async def process_deposit_amount(update: Update, context: ContextTypes.DEFAULT_T
     return STEP_DEPOSIT_PROVIDER
 
 async def process_deposit_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    1) Користувач обрав відображену назву провайдера ("СТАРА СИСТЕМА" або "НОВА СИСТЕМА").
-    2) Перетворюємо на внутрішню назву за PROVIDER_MAPPING:
-         - "СТАРА СИСТЕМА" → "CHAMPION"
-         - "НОВА СИСТЕМА" → "SUPEROMATIC"
-    3) Зберігаємо internal_provider у user_data["deposit_provider"].
-    4) Редагуємо повідомлення на “💳 Оберіть метод оплати:”.
-    """
     await update.callback_query.answer()
     display_provider = update.callback_query.data  # "СТАРА СИСТЕМА" або "НОВА СИСТЕМА"
     internal_provider = PROVIDER_MAPPING.get(display_provider, display_provider)
-
     context.user_data["deposit_provider"] = internal_provider
 
     base_id = context.user_data.get("base_msg_id")
@@ -113,11 +93,6 @@ async def process_deposit_provider(update: Update, context: ContextTypes.DEFAULT
     return STEP_DEPOSIT_PAYMENT
 
 async def process_deposit_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    1) Користувач обрав метод оплати (callback_data ∈ PAYMENTS).
-    2) Зберігаємо user_data["deposit_payment"].
-    3) Редагуємо повідомлення на “📎 Надішліть підтвердження (фото/документ/відео)”.
-    """
     await update.callback_query.answer()
     payment_method = update.callback_query.data
     context.user_data["deposit_payment"] = payment_method
@@ -137,11 +112,6 @@ async def process_deposit_payment(update: Update, context: ContextTypes.DEFAULT_
     return STEP_DEPOSIT_FILE
 
 async def process_deposit_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    1) Користувач надсилає фото / документ / відео.
-       Зберігаємо file_type та file_id.
-    2) Редагуємо повідомлення на “✅ Натисніть «Підтвердити»” із кнопкою “deposit_confirm”.
-    """
     if update.message.photo:
         ftype = "photo"
         file_id = update.message.photo[-1].file_id
@@ -187,18 +157,11 @@ async def process_deposit_file(update: Update, context: ContextTypes.DEFAULT_TYP
     return STEP_DEPOSIT_CONFIRM
 
 async def confirm_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    1) Користувач натиснув “✅ Підтвердити” (callback_data="deposit_confirm").
-    2) Зберігаємо запис у таблицю deposits із внутрішньою назвою провайдера:
-         (user_id, username, amount, provider, payment_method, file_type, file_id).
-    3) Редагуємо повідомлення на “💸 Ваше поповнення збережено!” + nav_buttons().
-    4) Завершуємо сценарій (ConversationHandler.END).
-    """
     await update.callback_query.answer()
     user = update.effective_user
 
     amount   = context.user_data.get("deposit_amount")
-    provider = context.user_data.get("deposit_provider")   # вже “CHAMPION” або “SUPEROMATIC”
+    provider = context.user_data.get("deposit_provider")
     payment  = context.user_data.get("deposit_payment")
     ftype    = context.user_data.get("deposit_file_type")
     file_id  = context.user_data.get("deposit_file_id")
@@ -215,7 +178,7 @@ async def confirm_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.commit()
 
     base_id = context.user_data.get("base_msg_id")
-    final_text = "💸 Ваше поповнення збережено! Очікуйте підтвердження від адміністратора."
+    final_text = "💸 Ваше поповнення збережено! Очікуйте підтвердження."
     if base_id:
         try:
             await context.bot.edit_message_text(
@@ -250,7 +213,4 @@ deposit_conv = ConversationHandler(
 )
 
 def register_deposit_handlers(app: Application) -> None:
-    """
-    Регіструє ConversationHandler для сценарію депозиту (група 0).
-    """
     app.add_handler(deposit_conv, group=0)
