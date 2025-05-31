@@ -1,14 +1,13 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from modules.callbacks import CB
 
-# Залишаємо «СТАРА СИСТЕМА» / «НОВА СИСТЕМА» лише якщо нам потрібно у депозиті.
-# У простому вигляді можна повернути «🏆 CHAMPION» / «🎰 SUPEROMATIC», якщо попередньо саме ці провайдери спрацьовували.
-PROVIDERS = ["🏆 CHAMPION", "🎰 SUPEROMATIC"]
+# Для депозиту/виведення: відображені назви провайдерів
+PROVIDERS = ["СТАРА СИСТЕМА", "НОВА СИСТЕМА"]
 PAYMENTS  = ["Карта", "Криптопереказ"]
 
 def nav_buttons() -> InlineKeyboardMarkup:
     """
-    «◀️ Назад» / «🏠 Головне меню»
+    “◀️ Назад” / “🏠 Головне меню”
     """
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("◀️ Назад",       callback_data=CB.BACK.value)],
@@ -17,7 +16,8 @@ def nav_buttons() -> InlineKeyboardMarkup:
 
 def provider_buttons() -> InlineKeyboardMarkup:
     """
-    Клавіатура вибору провайдера (для депозиту).
+    Клавіатура вибору провайдера (для депозиту),
+    відображає “СТАРА СИСТЕМА”/“НОВА СИСТЕМА”.
     """
     kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS]
     kb.append([
@@ -40,8 +40,8 @@ def payment_buttons() -> InlineKeyboardMarkup:
 def client_menu(is_authorized: bool) -> InlineKeyboardMarkup:
     """
     Меню для клієнта:
-     - Якщо is_authorized=False → «Мій профіль», «Знайти профіль», «Поповнити», «Вивести», «Допомога».
-     - Якщо is_authorized=True  → «Кешбек», «Поповнити», «Вивести», «Історія», «Вийти», «Допомога».
+    - Якщо is_authorized=False → кнопки “Мій профіль”, “Знайти профіль”, “Поповнити”, “Вивести кошти”, “Допомога”.
+    - Якщо is_authorized=True → кнопки “Кешбек”, “Поповнити”, “Вивести кошти”, “Історія”, “Вийти”, “Допомога”.
     """
     if not is_authorized:
         return InlineKeyboardMarkup([
@@ -63,9 +63,9 @@ def client_menu(is_authorized: bool) -> InlineKeyboardMarkup:
 
 def main_menu(is_admin: bool) -> InlineKeyboardMarkup:
     """
-    Головне меню /start:
-     - Якщо is_admin=True → показуємо «🛠 Адмін-панель».
-     - Інакше → клієнтське меню (неавторизований).
+    Головне меню (при /start):
+    - Якщо is_admin=True → показуємо клавіатуру адміна.
+    - Інакше → показуємо меню неавторизованого клієнта.
     """
     if is_admin:
         return InlineKeyboardMarkup([
@@ -77,7 +77,7 @@ def main_menu(is_admin: bool) -> InlineKeyboardMarkup:
 
 def admin_panel_kb() -> InlineKeyboardMarkup:
     """
-    Меню адмін-панелі: «Депозити», «Користувачі», «Виведення», «Статистика», «Пошук клієнта», «Розсилка».
+    Клавіатура адмін-панелі: депозити, користувачі, виведення, статистика, пошук, розсилка.
     """
     return InlineKeyboardMarkup([
         [
