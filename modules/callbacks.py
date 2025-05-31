@@ -6,6 +6,7 @@ class CB(Enum):
     # Навігація
     HOME             = "home"
     BACK             = "back"
+    REGISTER         = "register"         # додано для кнопки реєстрації
 
     # Профіль клієнта
     CLIENT_PROFILE   = "client_profile"
