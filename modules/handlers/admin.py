@@ -1,125 +1,92 @@
-# modules/handlers/admin.py
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CallbackQueryHandler, MessageHandler, filters, ContextTypes, Application
+from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters, Application
 from modules.config import ADMIN_ID
-from modules.db import authorize_card, search_user
-from modules.keyboards import client_menu
+from modules.db import authorize_card, search_user, broadcast_to_all
+from modules.keyboards import admin_panel_kb, client_menu
 from modules.callbacks import CB
+from modules.states import STEP_MENU, STEP_ADMIN_SEARCH, STEP_ADMIN_BROADCAST
 
-# ────────────────────────────────────────────────────────────────────────────────
+async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обробник натискання “🛠 Адмін-панель” (callback_data="admin_panel").
+    Показуємо клавіатуру адмін-панелі.
+    """
+    query = update.callback_query
+    await query.answer()
+    sent = await query.message.reply_text(
+        "🛠 Адмін-панель:",
+        reply_markup=admin_panel_kb()
+    )
+    context.user_data["base_msg_id"] = sent.message_id
+    return STEP_ADMIN_SEARCH
+
+async def admin_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обробник у адмін-панелі: коли адмін натиснув “🔍 Пошук клієнта”.
+    Запитуємо, щоб адміністратор ввів ID чи картку для пошуку.
+    """
+    await update.callback_query.message.reply_text(
+        "🔍 Введіть ID або номер картки для пошуку:",
+        reply_markup=client_menu(is_authorized=False)
+    )
+    return STEP_ADMIN_BROADCAST  # далі адмін надсилає текст або картку, яку шукаємо
+
+async def admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обробник у адмін-панелі: коли адмін натиснув “📢 Розсилка”.
+    Відправляємо адміністратору запит ввести текст повідомлення для broadcast.
+    """
+    await update.message.reply_text(
+        "📢 Введіть текст, який потрібно розіслати всім користувачам:",
+        reply_markup=client_menu(is_authorized=False)
+    )
+    return STEP_MENU
+
 async def admin_confirm_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Коли адміністратор натиснув «✅ Підтвердити картку» (callback_data="admin_confirm_card:user_id:card"):
-    1) Авторизуємо користувача (запис у clients).
-    2) Повідомляємо користувача: «Картка підтверджена, ви авторизовані».
-    3) Оновлюємо повідомлення адміну («Картка … підтверджена»).
+    Обробник callback_data рівного r"^admin_confirm_card:\d+:.+$".
+    Розбирає callback_data = "admin_confirm_card:<user_id>:<card>".
+    Зберігає картку в БД (authorize_card), повідомляє користувача.
     """
     await update.callback_query.answer()
     _, user_id_str, card = update.callback_query.data.split(":", 2)
     user_id = int(user_id_str)
 
-    # Додаємо або оновлюємо запис user_id→card
+    # Зберігаємо в БД (authorize_card) — потрібно, щоби потім користувач зміг увійти тим же card
     authorize_card(user_id, card)
 
-    # Повідомляємо клієнта про успішну авторизацію
+    # Повідомляємо клієнта
     await context.bot.send_message(
         chat_id=user_id,
-        text=f"🎉 Ваша картка {card} підтверджена. Ви успішно авторизовані.",
+        text=(
+            f"🎉 Ваша картка {card} підтверджена адміністратором.\n"
+            "Ви тепер успішно авторизовані. Використайте «💳 Мій профіль» ще раз."
+        ),
         reply_markup=client_menu(is_authorized=True)
     )
 
-    # Оновлюємо повідомлення адміну
+    # Оновлюємо повідомлення адміну, щоби він бачив, що картка підтверджена
     await update.callback_query.message.edit_text(
         f"✅ Картка {card} для користувача {user_id} підтверджена."
     )
 
-async def admin_deny_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Коли адміністратор натиснув «❌ Картка не знайдена» (callback_data="admin_deny_card:user_id:card"):
-    1) Видаляємо callback-повідомлення адміну або оновлюємо текст.
-    2) Додаємо user_id у pending_phone (щоб при наступному «Мій профіль» почати введення телефону).
-    3) Повідомляємо користувача: «Карта не знайдена, введіть телефон».
-    """
-    await update.callback_query.answer()
-    _, user_id_str, card = update.callback_query.data.split(":", 2)
-    user_id = int(user_id_str)
-
-    # Оновлюємо текст адміну
-    await update.callback_query.message.edit_text(
-        f"❌ Для користувача {user_id} картка {card} НЕ знайдена. Запитайте у нього телефон."
-    )
-
-    # Додаємо user_id до pending_phone
-    from modules.handlers.profile import pending_phone
-    pending_phone.add(user_id)
-
-    # Надсилаємо користувачу повідомлення з проханням ввести телефон
-    await context.bot.send_message(
-        chat_id=user_id,
-        text="❗️ Картку не знайдено. Будь ласка, введіть свій номер телефону (0XXXXXXXXX):",
-        reply_markup=nav_buttons()
-    )
-
-async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Коли адміністратор натиснув “🛠 Адмін-панель” (callback_data="admin_panel"):
-    1) Показуємо клавіатуру admin_panel_kb().
-    2) Переходимо в state STEP_ADMIN_SEARCH.
-    """
-    query = update.callback_query
-    await query.answer()
-    from modules.keyboards import admin_panel_kb
-    await query.message.reply_text("🛠 Адмін-панель:", reply_markup=admin_panel_kb())
-    return CB.ADMIN_SEARCH.value  # або відповідний state STEP_ADMIN_SEARCH
-
-async def admin_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Коли адміністратор у полі пошуку вводить ID чи картку.
-    Просто заглушка – ви можете реалізувати пошук клієнта (search_user) тут.
-    """
-    query = update.message.text.strip()
-    record = search_user(query)
-    if record:
-        await update.message.reply_text(f"Найдено: user_id={record['user_id']}, card={record['card']}, phone={record['phone']}")
-    else:
-        await update.message.reply_text("Користувача не знайдено.")
-
-    return CB.ADMIN_SEARCH.value  # залишаємо адміністратора в цьому state
-
-async def admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Коли адміністратор вводить текст для розсилки.
-    Розсилаємо всім клієнтам (використати broadcast_to_all).
-    """
-    from modules.db import broadcast_to_all
-    message = update.message.text
-    broadcast_to_all(message)
-    await update.message.reply_text("📢 Розсилка надіслана.")
-    return CB.ADMIN_BROADCAST.value
-
 def register_admin_handlers(app: Application) -> None:
     """
-    Реєструє всі admin-specific хендлери (група 0).
-    1) Обробник “🛠 Адмін-панель”
-    2) Обробники “admin_confirm_card” та “admin_deny_card”
-    3) Обробники пошуку та розсилки (додайте у відповідні group’и чи order’и)
+    Регіструє всі callback і message-хендлери для адмін-панелі (група=0).
     """
-    # Обовʼязково в group=0, щоб ці CallbackQueryHandler спрацювали раніше, ніж загальний роутер.
-    app.add_handler(
-        CallbackQueryHandler(admin_confirm_card, pattern=r"^admin_confirm_card:\d+:.+"),
-        group=0
-    )
-    app.add_handler(
-        CallbackQueryHandler(admin_deny_card, pattern=r"^admin_deny_card:\d+:.+"),
-        group=0
-    )
+    # 1) Обробник «Адмін-панель»
     app.add_handler(
         CallbackQueryHandler(show_admin_panel, pattern="^admin_panel$"),
         group=0
     )
+    # 2) Обробник при натисканні «✅ Підтвердити картку»
     app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, admin_search),
+        CallbackQueryHandler(admin_confirm_card, pattern=r"^admin_confirm_card:\d+:.+$"),
+        group=0
+    )
+    # 3) Інші адмінські сценарії (пошук, розсилка тощо):
+    app.add_handler(
+        CallbackQueryHandler(admin_search, pattern=f"^{CB.ADMIN_SEARCH.value}$"),
         group=0
     )
     app.add_handler(
