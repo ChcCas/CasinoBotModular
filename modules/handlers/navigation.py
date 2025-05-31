@@ -29,38 +29,29 @@ def _init_threads():
         conn.commit()
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Загальний роутер (група 1) для всіх callback_query, які не
-    “підхоплені” у групі 0 (ConversationHandler’ами).
-    1) Якщо callback_data відповідає початку Conversation (client_profile, deposit_start, withdraw_start, admin_search, admin_broadcast) — просто повертаємо None.
-    2) Якщо “admin_panel” — викликаємо show_admin_panel.
-    3) Якщо “home” або “back” — викликаємо start_command.
-    4) Якщо “help” — редагуємо або надсилаємо повідомлення з текстом допомоги.
-    5) Інакше — повертаємо start_command.
-    """
     query = update.callback_query
     data = query.data
     await query.answer()
 
-    # 1) Адмін натиснув “🛠 Адмін-панель”
+    # Адмін-панель
     if data == "admin_panel":
         return await show_admin_panel(update, context)
 
-    # 2) Якщо це початок ConversationHandler (група 0) — ігноруємо тут
+    # Якщо callback_data запускає ConversationHandler (група 0) — ігноруємо
     if data in (
-        CB.CLIENT_PROFILE.value,   # client_profile
-        CB.DEPOSIT_START.value,    # deposit_start
-        CB.WITHDRAW_START.value,   # withdraw_start
-        CB.ADMIN_SEARCH.value,     # admin_search
-        CB.ADMIN_BROADCAST.value   # admin_broadcast
+        CB.CLIENT_PROFILE.value,
+        CB.DEPOSIT_START.value,
+        CB.WITHDRAW_START.value,
+        CB.ADMIN_SEARCH.value,
+        CB.ADMIN_BROADCAST.value
     ):
         return
 
-    # 3) Якщо “Назад” чи “Головне меню”
+    # Назад / Головне меню
     if data in (CB.HOME.value, CB.BACK.value):
         return await start_command(update, context)
 
-    # 4) “Допомога”
+    # Допомога
     if data == CB.HELP.value:
         text = "ℹ️ Допомога:\n/start — перезапустити бота\n📲 Зверніться до підтримки, якщо є питання."
         base_id = context.user_data.get("base_msg_id")
@@ -90,27 +81,23 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["base_msg_id"] = sent.message_id
         return STEP_MENU
 
-    # 5) В усіх інших випадках повертаємося до головного меню
+    # Якщо нічого не збіглося — повертаємося до /start
     return await start_command(update, context)
 
 def register_navigation_handlers(app: Application):
-    """
-    Регіструємо загальний навігаційний роутер (група 1):
-      1) CallbackQueryHandler(start_command, pattern="^home$")
-      2) CallbackQueryHandler(start_command, pattern="^back$")
-      3) CallbackQueryHandler(menu_handler, pattern=".*")
-    Усі ConversationHandler-и (група 0) мають бути додані раніше.
-    """
     _init_threads()
 
+    # CallbackQueryHandler для “home”
     app.add_handler(
         CallbackQueryHandler(start_command, pattern="^home$"),
         group=1
     )
+    # CallbackQueryHandler для “back”
     app.add_handler(
         CallbackQueryHandler(start_command, pattern="^back$"),
         group=1
     )
+    # Основний menu_handler
     app.add_handler(
         CallbackQueryHandler(menu_handler, pattern=".*"),
         group=1
