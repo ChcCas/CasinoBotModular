@@ -4,21 +4,21 @@ from enum import Enum
 
 class CB(Enum):
     # Навігація
-    HOME = "home"
-    BACK = "back"
+    HOME             = "home"
+    BACK             = "back"
 
     # Профіль клієнта
-    CLIENT_PROFILE = "client_profile"
-    CLIENT_FIND    = "client_find"
+    CLIENT_PROFILE   = "client_profile"
+    CLIENT_FIND      = "client_find"
 
     # Початок сценаріїв депозиту/виведення
-    DEPOSIT_START  = "deposit_start"
-    WITHDRAW_START = "withdraw_start"
+    DEPOSIT_START    = "deposit_start"
+    WITHDRAW_START   = "withdraw_start"
 
     # Сценарій депозиту
-    DEPOSIT_AMOUNT  = "deposit_amount"
-    DEPOSIT_FILE    = "deposit_file"
-    DEPOSIT_CONFIRM = "deposit_confirm"
+    DEPOSIT_AMOUNT   = "deposit_amount"
+    DEPOSIT_FILE     = "deposit_file"
+    DEPOSIT_CONFIRM  = "deposit_confirm"
 
     # Сценарій виведення
     WITHDRAW_AMOUNT  = "withdraw_amount"
@@ -27,4 +27,8 @@ class CB(Enum):
     WITHDRAW_CONFIRM = "withdraw_confirm"
 
     # Додаткові дії
-    HELP = "help"
+    HELP             = "help"
+
+    # Адмінські дії
+    ADMIN_SEARCH     = "admin_search"
+    ADMIN_BROADCAST  = "admin_broadcast"
