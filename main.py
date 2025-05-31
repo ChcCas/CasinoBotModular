@@ -36,12 +36,12 @@ def main():
     register_start_handler(app)
     register_admin_handlers(app)
 
-    # 4) Реєструємо ConversationHandler’и для клієнтських сценаріїв
-    app.add_handler(profile_conv, group=1)
-    app.add_handler(deposit_conv, group=1)
-    app.add_handler(withdraw_conv, group=1)
+    # 4) Реєструємо ConversationHandler’и для клієнтських сценаріїв (група 0)
+    app.add_handler(profile_conv, group=0)
+    app.add_handler(deposit_conv, group=0)
+    app.add_handler(withdraw_conv, group=0)
 
-    # 5) Реєструємо загальний роутер кнопок (home/back/help тощо)
+    # 5) Реєструємо загальний роутер кнопок (home/back/help тощо) у групі 1
     register_navigation_handlers(app)
 
     # 6) Запускаємо бот у режимі webhook
