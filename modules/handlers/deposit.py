@@ -1,178 +1,143 @@
+# modules/handlers/deposit.py
+
 import re
 import sqlite3
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.error import BadRequest
 from telegram.ext import (
-    ConversationHandler,
     CallbackQueryHandler,
     MessageHandler,
+    ConversationHandler,
     filters,
     ContextTypes,
     Application
 )
 from modules.config import DB_NAME
-from modules.keyboards import nav_buttons, provider_buttons, payment_buttons
+from modules.db import search_user  # для перевірки, чи існує картка у БД
 from modules.callbacks import CB
+from modules.keyboards import nav_buttons, provider_buttons, payment_buttons
 from modules.states import (
     STEP_DEPOSIT_AMOUNT,
     STEP_DEPOSIT_PROVIDER,
     STEP_DEPOSIT_PAYMENT,
-    STEP_DEPOSIT_FILE,
     STEP_DEPOSIT_CONFIRM,
+    STEP_MENU
 )
-from datetime import datetime
 
 async def start_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Вхід у сценарій «Поповнити» (callback_data="deposit_start").
-    Питаємо суму.
+    Вхід у сценарій «Поповнити» (клієнт натиснув «💰 Поповнити»).
+    Питаємо у користувача суму.
     """
     await update.callback_query.answer()
-    text = "💸 Введіть суму для поповнення:"
-    sent = await update.callback_query.message.reply_text(text, reply_markup=nav_buttons())
-    context.user_data["base_msg_id"] = sent.message_id
+    await update.callback_query.message.reply_text(
+        "💸 Введіть суму для поповнення:",
+        reply_markup=nav_buttons()
+    )
     return STEP_DEPOSIT_AMOUNT
 
 async def process_deposit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Клієнт вводить суму.
-    Переходимо до вибору провайдера.
+    Коли клієнт ввів суму:
+    1) Зберігаємо її у user_data
+    2) Переходимо до вибору провайдера
     """
+    text = update.message.text.strip()
     try:
-        amount = float(update.message.text.strip())
+        amount = float(text)
     except ValueError:
-        await update.message.reply_text("❗️ Введіть коректну суму:", reply_markup=nav_buttons())
+        await update.message.reply_text(
+            "❗️ Введіть правильну числову суму:",
+            reply_markup=nav_buttons()
+        )
         return STEP_DEPOSIT_AMOUNT
 
-    context.user_data["amount"] = amount
-    text = "🎰 Оберіть провайдера:"
-    sent = await update.message.reply_text(text, reply_markup=provider_buttons())
-    context.user_data["base_msg_id"] = sent.message_id
+    context.user_data["deposit_amount"] = amount
+    await update.message.reply_text(
+        "🎰 Оберіть провайдера:", reply_markup=provider_buttons()
+    )
     return STEP_DEPOSIT_PROVIDER
 
 async def process_deposit_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Клієнт обирає провайдера (“СТАРА СИСТЕМА” або “НОВА СИСТЕМА”).
-    Зберігаємо це, переходимо до вибору методу оплати.
+    Коли клієнт обрав провайдера («СТАРА СИСТЕМА» або «НОВА СИСТЕМА»).
     """
-    provider = update.callback_query.data  # тут “СТАРА СИСТЕМА” або “НОВА СИСТЕМА”
-    context.user_data["provider"] = provider
-    await update.callback_query.answer()
+    provider = update.callback_query.data  # “СТАРА СИСТЕМА” або “НОВА СИСТЕМА”
+    context.user_data["deposit_provider"] = provider
 
-    text = "💳 Оберіть метод оплати:"
-    sent = await update.callback_query.message.reply_text(text, reply_markup=payment_buttons())
-    context.user_data["base_msg_id"] = sent.message_id
+    await update.callback_query.message.reply_text(
+        "💳 Оберіть метод оплати:", reply_markup=payment_buttons()
+    )
     return STEP_DEPOSIT_PAYMENT
 
 async def process_deposit_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Клієнт обирає метод оплати (“Карта” або “Криптопереказ”).
-    Питаємо суму ще раз (якщо потрібні реквізити), 
-    але ми вже маємо суму, тому переходимо просто до запиту файлу.
+    Коли клієнт обрав метод (наприклад, «Карта» або «Криптопереказ»).
+    Питаємо останній крок – підтвердження.
     """
     payment = update.callback_query.data
-    context.user_data["payment"] = payment
-    await update.callback_query.answer()
+    context.user_data["deposit_payment"] = payment
 
-    text = "📎 Надішліть підтвердження (фото, документ або відео):"
-    sent = await update.callback_query.message.reply_text(text, reply_markup=nav_buttons())
-    context.user_data["base_msg_id"] = sent.message_id
-    return STEP_DEPOSIT_FILE
-
-async def process_deposit_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Клієнт надсилає фото/документ/відео підтвердження.
-    Переходимо до фінального підтвердження.
-    """
-    # Ми просто зберемо тип файлу, а потім вставимо у БД
-    if update.message.photo:
-        ftype = "photo"
-    elif update.message.document:
-        ftype = "document"
-    elif update.message.video:
-        ftype = "video"
-    else:
-        ftype = "unknown"
-
-    context.user_data["file_type"] = ftype
-
-    kb = [
-        [InlineKeyboardButton("✅ Підтвердити", callback_data=CB.DEPOSIT_CONFIRM.value)],
-        [InlineKeyboardButton("◀️ Назад",       callback_data=CB.BACK.value)],
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Підтвердити поповнення", callback_data="deposit_confirm")],
+        [InlineKeyboardButton("◀️ Назад", callback_data=CB.BACK.value)],
         [InlineKeyboardButton("🏠 Головне меню", callback_data=CB.HOME.value)],
-    ]
-    text = "✅ Натисніть підтвердити:"
-    sent = await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
-    context.user_data["base_msg_id"] = sent.message_id
+    ])
+    await update.callback_query.message.reply_text(
+        f"💰 Ви хочете поповнити {context.user_data['deposit_amount']} UAH\n"
+        f"Провайдер: {context.user_data['deposit_provider']}\n"
+        f"Метод: {context.user_data['deposit_payment']}\n\n"
+        "Натисніть «✅ Підтвердити поповнення», щоб завершити.",
+        reply_markup=kb
+    )
     return STEP_DEPOSIT_CONFIRM
 
 async def confirm_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Клієнт натискає «✅ Підтвердити» фінальну кнопку.
-    Ми зберігаємо транзакцію в таблиці transactions.
+    Коли клієнт натиснув «✅ Підтвердити поповнення» (callback_data="deposit_confirm").
+    Зберігаємо в БД і повідомляємо користувача.
     """
     await update.callback_query.answer()
-    user = update.effective_user
-    user_id = user.id
-    username = user.username or ""
-    card = context.user_data.get("amount")   # приміром, зберегли суму
-    provider = context.user_data.get("provider")
-    payment = context.user_data.get("payment")
-    amount = context.user_data.get("amount")
-    ftype = context.user_data.get("file_type")
-    now = datetime.utcnow().isoformat()
+    user_id = update.effective_user.id
+    amount = context.user_data.get("deposit_amount")
+    provider = context.user_data.get("deposit_provider")
+    payment = context.user_data.get("deposit_payment")
 
-    # Записуємо транзакцію
+    # Запис у таблицю deposits
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO transactions (user_id, type, amount, info, timestamp) VALUES (?, ?, ?, ?, ?)",
-        (user_id, "deposit", amount, f"{provider}/{payment}", now)
-    )
+    cursor.execute("""
+        INSERT INTO deposits (user_id, amount, provider, payment_method)
+        VALUES (?, ?, ?, ?)
+    """, (user_id, amount, provider, payment))
     conn.commit()
     conn.close()
 
-    # Повідомляємо клієнта:
-    text = "💸 Поповнення збережено! Очікуйте підтвердження."
-    keyboard = client_menu(is_authorized=True)
-    base_id = context.user_data.get("base_msg_id")
-    if base_id:
-        try:
-            await context.bot.edit_message_text(
-                chat_id=update.effective_chat.id,
-                message_id=base_id,
-                text=text,
-                reply_markup=keyboard
-            )
-        except BadRequest as e:
-            if "Message to edit not found" in str(e) or "Message is not modified" in str(e):
-                sent = await update.callback_query.message.reply_text(text, reply_markup=keyboard)
-                context.user_data["base_msg_id"] = sent.message_id
-            else:
-                raise
-    else:
-        sent = await update.callback_query.message.reply_text(text, reply_markup=keyboard)
-        context.user_data["base_msg_id"] = sent.message_id
-
-    context.user_data.pop("base_msg_id", None)
-    return ConversationHandler.END
+    text = f"💸 Ваше поповнення {amount} UAH за {provider}/{payment} успішно створено.\nОчікуйте підтвердження."
+    keyboard = nav_buttons()
+    await update.callback_query.message.reply_text(text, reply_markup=keyboard)
+    return STEP_MENU
 
 def register_deposit_handlers(app: Application) -> None:
+    """
+    Регіструємо ConversationHandler(«Поповнити») у групі 0.
+    """
     deposit_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(start_deposit, pattern=f"^{CB.DEPOSIT_START.value}$")
         ],
         states={
             STEP_DEPOSIT_AMOUNT:   [MessageHandler(filters.TEXT & ~filters.COMMAND, process_deposit_amount)],
-            STEP_DEPOSIT_PROVIDER: [CallbackQueryHandler(process_deposit_provider, pattern="^(СТАРА СИСТЕМА|НОВА СИСТЕМА)$")],
-            STEP_DEPOSIT_PAYMENT:  [CallbackQueryHandler(process_deposit_payment, pattern="^(Карта|Криптопереказ)$")],
-            STEP_DEPOSIT_FILE:     [MessageHandler(filters.PHOTO | filters.Document.ALL | filters.VIDEO, process_deposit_file)],
-            STEP_DEPOSIT_CONFIRM:  [CallbackQueryHandler(confirm_deposit, pattern=f"^{CB.DEPOSIT_CONFIRM.value}$")],
+            STEP_DEPOSIT_PROVIDER: [CallbackQueryHandler(process_deposit_provider,
+                                                         pattern="^(" + "|".join(["СТАРА СИСТЕМА", "НОВА СИСТЕМА"]) + ")$")],
+            STEP_DEPOSIT_PAYMENT:  [CallbackQueryHandler(process_deposit_payment,
+                                                         pattern="^(" + "|".join(["Карта", "Криптопереказ"]) + ")$")],
+            STEP_DEPOSIT_CONFIRM:  [CallbackQueryHandler(confirm_deposit, pattern="^deposit_confirm$")],
         },
         fallbacks=[
             CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.BACK.value}$"),
             CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.HOME.value}$"),
         ],
-        per_chat=True,
+        per_chat=True
     )
+
     app.add_handler(deposit_conv, group=0)
