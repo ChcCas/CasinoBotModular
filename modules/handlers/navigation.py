@@ -86,7 +86,6 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ─── Адмін: пошук користувача ───
     if data == "admin_search":
-        # переходить у ConversationHandler(адмін-пошук)
         return STEP_ADMIN_SEARCH
 
     # ─── Адмін: розсилка ───
@@ -106,16 +105,16 @@ def register_navigation_handlers(app: Application):
         group=1
     )
     app.add_handler(
-        CallbackQueryHandler(start_command, pattern="^home$", block=False),
+        CallbackQueryHandler(start_command, pattern="^home$"),
         group=1
     )
     app.add_handler(
-        CallbackQueryHandler(start_command, pattern="^back$", block=False),
+        CallbackQueryHandler(start_command, pattern="^back$"),
         group=1
     )
 
     # Основний menu_handler ловить усі інші callback_query
     app.add_handler(
-        CallbackQueryHandler(menu_handler, pattern=".*", block=False),
+        CallbackQueryHandler(menu_handler, pattern=".*"),
         group=1
     )
