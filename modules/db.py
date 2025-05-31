@@ -20,15 +20,6 @@ def init_db():
     )
     """)
 
-    # Таблиця реєстрацій (залежить від вашої логіки)
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS registrations (
-        user_id INTEGER PRIMARY KEY,
-        name TEXT,
-        phone TEXT
-    )
-    """)
-
     # Таблиця депозитів (за потребою)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS deposits (
@@ -61,7 +52,7 @@ def init_db():
 def search_user(query: str):
     """
     Шукає користувача за user_id або за номером картки.
-    Повертає dict з полями (user_id, card, phone, confirmed) або None.
+    Повертає dict із полями (user_id, card, phone, confirmed) або None.
     """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -82,24 +73,22 @@ def search_user(query: str):
 
 def list_all_clients():
     """
-    Повертає всю таблицю clients як список user_id (тільки підтверджених).
+    Повертає весь список user_id з clients, у яких confirmed = 1.
     """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute("SELECT user_id FROM clients WHERE confirmed = 1")
     rows = cursor.fetchall()
     conn.close()
-    # Повертаємо список простих чисел [user_id1, user_id2, ...]
     return [row[0] for row in rows]
 
 def authorize_card(user_id: int, card: str, phone: str = None):
     """
-    Використовується адміністратором, щоб підтвердити картку клієнта.
-    При підтвердженні ставить confirmed=1, заповнює картку (та телефон, якщо надається).
+    Підтверджуємо картку клієнта (установлюємо confirmed=1).
+    Якщо запису не було, створюємо його, інакше оновлюємо.
     """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    # Якщо клієнта немає в таблиці, створимо, інакше оновимо
     cursor.execute("""
         INSERT INTO clients (user_id, card, phone, confirmed)
         VALUES (?, ?, ?, 1)
@@ -107,6 +96,6 @@ def authorize_card(user_id: int, card: str, phone: str = None):
             card = excluded.card,
             phone = COALESCE(excluded.phone, clients.phone),
             confirmed = 1
-    """, (user_id, card, phone))
+    """, (user_id, card))
     conn.commit()
     conn.close()
