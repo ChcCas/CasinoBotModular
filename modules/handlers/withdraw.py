@@ -85,7 +85,6 @@ async def withdraw_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     amt    = context.user_data["withdraw_amount"]
     method = context.user_data["withdraw_method"]
-    # Тут можна зберегти запит у БД або відправити адміну
     await update.callback_query.message.edit_text(
         f"🎉 Ваш запит на виведення {amt} ({method}) успішно прийнято.\n"
         "Очікуйте підтвердження.",
@@ -95,15 +94,19 @@ async def withdraw_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 withdraw_conv = ConversationHandler(
-    entry_points=[CallbackQueryHandler(withdraw_start, pattern=f"^{CB.WITHDRAW_START.value}$")],
+    entry_points=[
+        CallbackQueryHandler(withdraw_start, pattern=f"^{CB.WITHDRAW_START.value}$")
+    ],
     states={
-        STEP_WITHDRAW_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_amount)],
-        STEP_WITHDRAW_METHOD: [CallbackQueryHandler(withdraw_method, pattern="^Карта$|^Криптопереказ$")],
-        STEP_WITHDRAW_DETAILS:[MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_details)],
-        STEP_WITHDRAW_CONFIRM:[CallbackQueryHandler(withdraw_confirm, pattern=f"^{CB.WITHDRAW_CONFIRM.value}$")],
+        STEP_WITHDRAW_AMOUNT:  [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_amount)],
+        STEP_WITHDRAW_METHOD:  [CallbackQueryHandler(withdraw_method, pattern="^Карта$|^Криптопереказ$")],
+        STEP_WITHDRAW_DETAILS: [MessageHandler(filters.TEXT & ~filters.COMMAND, withdraw_details)],
+        STEP_WITHDRAW_CONFIRM: [CallbackQueryHandler(withdraw_confirm, pattern=f"^{CB.WITHDRAW_CONFIRM.value}$")],
     },
-    fallbacks=[CallbackQueryHandler(withdraw_start, pattern=f"^{CB.BACK.value}$")],
-    per_chat=True,  # <-- Замість per_message=True
+    fallbacks=[
+        CallbackQueryHandler(withdraw_start, pattern=f"^{CB.BACK.value}$")
+    ],
+    per_chat=True,
 )
 
 def register_withdraw_handlers(app: "Application") -> None:
