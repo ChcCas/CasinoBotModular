@@ -271,18 +271,13 @@ async def logout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     і повертаємо клієнта в головне меню (як неавторизованого).
     """
     await update.callback_query.answer()
-    user_id = update.effective_user.id
 
-    # Якщо хочемо — можна також видалити картку з БД, але зазвичай "logout" 
-    # означає просто скидання сесії, не обов’язково видаляти запис у clients.
-    # Тому просто очищуємо base_msg_id, а головне меню покаже, що користувач 
-    # більше не авторизований.
+    # Очищаємо base_msg_id, щоб при наступному “Мій профіль” знову запитати картку
     context.user_data.pop("base_msg_id", None)
 
     text = "🔒 Ви вийшли з профілю. Використовуйте “💳 Мій профіль” для повторної авторизації."
     keyboard = client_menu(is_authorized=False)
 
-    # Надсилаємо або редагуємо повідомлення
     sent = await update.callback_query.message.reply_text(
         text,
         reply_markup=keyboard
@@ -340,11 +335,11 @@ profile_conv = ConversationHandler(
             CallbackQueryHandler(history_handler, pattern=r"^history$"),
             CallbackQueryHandler(logout_handler, pattern=r"^logout$"),
             CallbackQueryHandler(help_auth_handler, pattern=f"^{CB.HELP.value}$"),
-            # Кнопки “deposit_start” та “withdraw_start” будуть оброблені окремими ConversationHandler-ами
+            # Кнопки “deposit_start” та “withdraw_start” оброблюються окремими ConversationHandler-ами
         ]
     },
     fallbacks=[
-        # Якщо користувач натисне “Назад”/“Головне меню” — просто виходимо з цього сценарію
+        # Якщо користувач натисне “Назад” / “Головне меню” — виходимо з цього сценарію
         CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.BACK.value}$"),
         CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.HOME.value}$"),
     ],
