@@ -11,62 +11,74 @@ from telegram.ext import (
 )
 from modules.config import ADMIN_ID
 from modules.db import authorize_card, search_user
-from modules.keyboards import nav_buttons
+from modules.keyboards import nav_buttons, client_menu
 from modules.callbacks import CB
-from modules.states import STEP_FIND_CARD_PHONE
+from modules.states import STEP_FIND_CARD_PHONE, STEP_MENU
 
 async def start_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Entry point: користувач натиснув “💳 Мій профіль” (callback_data="client_profile").
-    Запитуємо номер клубної картки.
+    Крок 1: користувач натиснув “💳 Мій профіль” (callback_data="client_profile").
+    Надсилаємо одне базове повідомлення “Введіть номер картки” та зберігаємо message_id.
     """
-    if update.callback_query:
-        await update.callback_query.answer()
+    await update.callback_query.answer()
 
-    msg = await update.callback_query.message.reply_text(
-        "💳 Введіть номер вашої клубної картки:",
+    text = "💳 Введіть номер вашої клубної картки:"
+    sent = await update.callback_query.message.reply_text(
+        text,
         reply_markup=nav_buttons()
     )
-    # Зберігаємо ID цього повідомлення (якщо пізніше треба редагувати)
-    context.user_data['base_msg'] = msg.message_id
+    context.user_data["base_msg_id"] = sent.message_id
+
     return STEP_FIND_CARD_PHONE
 
 async def find_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Обробляємо текст, який ввів користувач (номер картки):
-      1) Надсилаємо адміну повідомлення з кнопкою підтвердження
-         (callback_data="admin_confirm_card:<user_id>:<card>").
-      2) Повідомляємо клієнта, що запит відправлено.
-      3) Закінчуємо сценарій (ConversationHandler.END).
+    Крок 2: обробка введеного номеру картки.
+    1) Відправляємо адміну повідомлення з кнопкою “Підтвердити картку”. 
+    2) Редагуємо те саме повідомлення клієнта текстом “Запит відправлено”.
     """
     card = update.message.text.strip()
     user_id = update.effective_user.id
+    full_name = update.effective_user.full_name
 
+    # 1) Надсилаємо адміну запит із callback для підтвердження
     kb = InlineKeyboardMarkup([[
         InlineKeyboardButton(
             "✅ Підтвердити картку",
             callback_data=f"admin_confirm_card:{user_id}:{card}"
         )
     ]])
-    # Надсилаємо адміну повідомлення
     await context.bot.send_message(
         chat_id=ADMIN_ID,
         text=(
-            f"ℹ️ Користувач {update.effective_user.full_name} (ID {user_id})\n"
+            f"ℹ️ Користувач {full_name} (ID {user_id})\n"
             f"ввів картку: {card}\n"
-            "Перевірте, чи така картка є, і натисніть «✅ Підтвердити картку»."
+            "Перевірте наявність карти та натисніть «✅ Підтвердити картку»."
         ),
         reply_markup=kb
     )
 
-    # Інформуємо клієнта
-    await update.message.reply_text(
-        "✅ Ваш запит відправлено адміністратору. Очікуйте підтвердження.",
-        reply_markup=nav_buttons()
-    )
+    # 2) Редагуємо повідомлення клієнта (це ж саме, base_msg_id)
+    base_id = context.user_data.get("base_msg_id")
+    if base_id:
+        await context.bot.edit_message_text(
+            chat_id=update.effective_chat.id,
+            message_id=base_id,
+            text="✅ Ваш запит відправлено адміністратору. Очікуйте підтвердження.",
+            reply_markup=nav_buttons()
+        )
+    else:
+        sent = await update.message.reply_text(
+            "✅ Ваш запит відправлено адміністратору. Очікуйте підтвердження.",
+            reply_markup=nav_buttons()
+        )
+        context.user_data["base_msg_id"] = sent.message_id
 
+    # Очищаємо базове повідомлення, бо сценарій завершено
+    context.user_data.pop("base_msg_id", None)
     return ConversationHandler.END
 
+# ─── Головний ConversationHandler для сценарію “Мій профіль” ────────────────────
 profile_conv = ConversationHandler(
     entry_points=[
         CallbackQueryHandler(start_profile, pattern=f"^{CB.CLIENT_PROFILE.value}$")
@@ -77,15 +89,16 @@ profile_conv = ConversationHandler(
         ],
     },
     fallbacks=[
-        # Якщо користувач натисне «Назад» або «Головне меню», завершуємо бесіду
+        # “Назад” або “Головне меню” → повернутися до /start
         CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.BACK.value}$"),
         CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.HOME.value}$"),
     ],
+    # Використовуємо per_chat=True, щоб відстежувати стан у межах чату
     per_chat=True,
 )
 
 def register_profile_handlers(app: Application) -> None:
     """
-    Реєструє profile_conv (ConversationHandler) у групі 0.
+    Регіструємо scenario “Мій профіль” (profile_conv) у групі 0.
     """
     app.add_handler(profile_conv, group=0)
