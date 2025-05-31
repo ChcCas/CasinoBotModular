@@ -9,11 +9,16 @@ from telegram.ext import (
     ContextTypes,
 )
 from modules.config import ADMIN_ID
-from modules.keyboards import nav_buttons
+from modules.db import authorize_card, search_user
+from modules.keyboards import nav_buttons, client_menu
 from modules.callbacks import CB
 from modules.states import STEP_FIND_CARD_PHONE
 
 async def start_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Entry point: користувач натиснув “💳 Мій профіль”.
+    Запитуємо номер клубної картки.
+    """
     await update.callback_query.answer()
     msg = await update.callback_query.message.reply_text(
         "💳 Введіть номер вашої клубної картки:",
@@ -23,10 +28,15 @@ async def start_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_FIND_CARD_PHONE
 
 async def find_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обробка введеного номера картки:
+     1) надсилаємо адміну повідомлення з кнопкою підтвердження;
+     2) інформуємо користувача, що запит відправлено.
+    """
     card = update.message.text.strip()
     user_id = update.effective_user.id
 
-    # Надсилаємо адміну запит
+    # 1) Надсилаємо адміну запит із callback для підтвердження
     kb = InlineKeyboardMarkup([[
         InlineKeyboardButton(
             "✅ Підтвердити картку",
@@ -43,15 +53,16 @@ async def find_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=kb
     )
 
-    # Інформуємо користувача
+    # 2) Повідомляємо клієнта
     await update.message.reply_text(
         "✅ Ваш запит відправлено адміністратору. Очікуйте підтвердження.",
         reply_markup=nav_buttons()
     )
 
-    # Завершуємо розмову
+    # Завершуємо сценарій
     return ConversationHandler.END
 
+# ConversationHandler для “Мій профіль”
 profile_conv = ConversationHandler(
     entry_points=[
         CallbackQueryHandler(start_profile, pattern=f"^{CB.CLIENT_PROFILE.value}$")
@@ -65,5 +76,11 @@ profile_conv = ConversationHandler(
         CallbackQueryHandler(start_profile, pattern=f"^{CB.BACK.value}$"),
         CallbackQueryHandler(start_profile, pattern=f"^{CB.HOME.value}$"),
     ],
-    per_message=True,
+    per_chat=True,  # <-- Замість per_message=True
 )
+
+def register_profile_handlers(app: "Application") -> None:
+    """
+    Реєструє ConversationHandler для сценарію профілю.
+    """
+    app.add_handler(profile_conv, group=0)
