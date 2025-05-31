@@ -1,46 +1,55 @@
-# modules/handlers/navigation.py
+# main.py
 
-from telegram.ext import CallbackQueryHandler, Application
-from .start import start_command
-from .deposit import deposit_conv
-from .withdraw import withdraw_conv
-from .profile import profile_conv
-from modules.callbacks import CB
-from modules.keyboards import nav_buttons
+import logging
+from telegram.ext import ApplicationBuilder, ContextTypes
 
-def register_navigation_handlers(app: Application):
-    """
-    1) Реєструємо усі ConversationHandler’и з group=0
-    2) Додаємо загальний menu_router з group=1, який НЕ перехоплюватиме
-       CALLBACKи, призначені profile_conv, deposit_conv, withdraw_conv
-    """
-    # —————————— Група 0: весь ваш ConversationHandler ——————————
+from modules.config import TOKEN, WEBHOOK_URL, PORT
+from modules.db import init_db
+
+from modules.handlers.start import register_start_handler
+from modules.handlers.admin import register_admin_handlers
+
+from modules.handlers.deposit import deposit_conv
+from modules.handlers.withdraw import withdraw_conv
+from modules.handlers.profile import profile_conv
+from modules.handlers.navigation import register_navigation_handlers
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.error("Exception while handling update:", exc_info=context.error)
+
+def main():
+    # 1) Ініціалізуємо БД
+    init_db()
+
+    # 2) Створюємо Application
+    app = ApplicationBuilder().token(TOKEN).build()
+    app.add_error_handler(error_handler)
+
+    # 3) Реєструємо /start та адмін-хендлери
+    register_start_handler(app)
+    register_admin_handlers(app)
+
+    # 4) Реєструємо ConversationHandler’и і загальний роутер
+    #    ВАЖЛИВО: саме в такому порядку і з відповідними групами
     app.add_handler(profile_conv, group=0)
     app.add_handler(deposit_conv, group=0)
     app.add_handler(withdraw_conv, group=0)
 
-    # —————————— Група 1: загальний роутер для всіх інших callback ——————————
-    async def menu_router(update, context):
-        query = update.callback_query
-        data = query.data
-        await query.answer()
+    register_navigation_handlers(app)  # це додає menu_router у group=1
 
-        # Якщо “home” або “back” — перекидаємо на /start
-        if data in (CB.HOME.value, CB.BACK.value):
-            return await start_command(update, context)
-
-        # Якщо “help” — надсилаємо підказку
-        if data == CB.HELP.value:
-            await query.message.reply_text(
-                "ℹ️ /start — перезапустити бота",
-                reply_markup=nav_buttons()
-            )
-            return
-
-        # Якщо ніяка інша кнопка — для безпеки повернемо на /start
-        return await start_command(update, context)
-
-    app.add_handler(
-        CallbackQueryHandler(menu_router, pattern=".*"),
-        group=1
+    # 5) Налаштовуємо webhook
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path="webhook",
+        webhook_url=WEBHOOK_URL,
     )
+
+if __name__ == "__main__":
+    main()
