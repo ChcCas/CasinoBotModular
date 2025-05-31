@@ -2,7 +2,7 @@
 
 import logging
 from telegram.ext import ApplicationBuilder, ContextTypes
-from modules.config import TOKEN, WEBHOOK_URL, PORT, BOT_INSTANCE as GLOBAL_BOT_INSTANCE
+from modules.config import TOKEN, WEBHOOK_URL, PORT
 from modules.db import init_db
 from modules.handlers.start import register_start_handler
 from modules.handlers.admin import register_admin_handlers
@@ -30,13 +30,10 @@ def main():
     # 2) Створюємо Telegram Application із токеном
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # 3) Записуємо глобальний BOT_INSTANCE (щоб можна було використовувати broadcast_to_all)
-    #    У modules/config.py ми визначили BOT_INSTANCE = None, тепер переприсвоюємо його тут:
-    #    (якщо у вас BOT_INSTANCE імпортується не так, переконайтеся, що в config.py ключ названо саме BOT_INSTANCE)
-    from modules.config import BOT_INSTANCE as bot_inst
-    bot_inst = app.bot
-    # Щойно створений объект bot зберігаємо в глобальній змінній modules.config.BOT_INSTANCE
-    # Таку змінну використовує, наприклад, функція broadcast_to_all() у modules/db.py
+    # 3) Записуємо глобальний BOT_INSTANCE (щоб його могли використовувати, наприклад, broadcast_to_all)
+    #    Визначення BOT_INSTANCE повинно бути в modules/config.py як BOT_INSTANCE = None
+    import modules.config as config_module
+    config_module.BOT_INSTANCE = app.bot
 
     # 4) Додаємо глобальний обробник помилок
     app.add_error_handler(error_handler)
