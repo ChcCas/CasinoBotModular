@@ -12,7 +12,7 @@ from modules.handlers.profile import register_profile_handlers
 from modules.handlers.deposit import register_deposit_handlers
 from modules.handlers.withdraw import register_withdraw_handlers
 from modules.handlers.navigation import register_navigation_handlers
-from register_routes import register_routes  # переконайтеся, що файл register_routes.py знаходиться поруч
+from modules.register_routes import register_routes  # register_routes.py тепер у modules/
 
 # ─── Налаштування логування ───────────────────────────────────────────────────
 logging.basicConfig(
