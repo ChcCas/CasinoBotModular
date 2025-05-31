@@ -17,13 +17,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Обробка /start або натискання кнопки “Головне меню”/“Назад”.
     Надсилається або редагується єдине повідомлення з головним меню.
     """
+    # Якщо це callback_query — відповідаємо на неї (щоб зникло "Loading...").
     if update.callback_query:
         await update.callback_query.answer()
 
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    # Визначаємо текст і клавіатуру
+    # Вибираємо текст і клавіатуру залежно від того, чи адмін.
     if user_id == ADMIN_ID:
         text = "🛠 Адмін-панель"
         keyboard = admin_panel_kb()
@@ -33,7 +34,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     base_id = context.user_data.get("base_msg_id")
     if base_id:
-        # спробуємо редагувати існуюче повідомлення
+        # Спробуємо редагувати наявне повідомлення.
         try:
             await context.bot.edit_message_text(
                 chat_id=chat_id,
@@ -42,11 +43,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=keyboard
             )
         except BadRequest as e:
-            # Ігноруємо помилку, якщо текст і клавіатура не змінилися
-            if "Message is not modified" not in str(e):
+            # Ігноруємо, якщо повідомлення не знайдено чи не змінилося.
+            msg = str(e)
+            if ("Message is not modified" not in msg
+                    and "Message to edit not found" not in msg):
                 raise
     else:
-        sent = await update.effective_chat.send_message(
+        # Надсилаємо нове повідомлення і запам'ятовуємо його ID.
+        sent = await context.bot.send_message(
+            chat_id=chat_id,
             text=text,
             reply_markup=keyboard
         )
@@ -55,4 +60,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_MENU
 
 def register_start_handler(app: Application) -> None:
+    """
+    Регіструє CommandHandler для /start.
+    Повинен бути в group=0, щоб спрацьовував перед загальною обробкою callback_query.
+    """
     app.add_handler(CommandHandler("start", start_command), group=0)
