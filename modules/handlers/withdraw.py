@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 from modules.config import DB_NAME
 from modules.callbacks import CB
-from modules.keyboards import nav_buttons, payment_buttons, PAYMENTS
+from modules.keyboards import nav_buttons, payment_buttons
 from modules.states import (
     STEP_WITHDRAW_AMOUNT,
     STEP_WITHDRAW_METHOD,
@@ -22,28 +22,18 @@ from modules.states import (
 )
 
 async def withdraw_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Крок 1: натискання “💸 Вивести кошти”.
-    Надсилаємо базове повідомлення “Введіть суму” та зберігаємо message_id.
-    """
     await update.callback_query.answer()
-
     text = "💳 Введіть суму для виведення:"
     sent = await update.callback_query.message.reply_text(
-        text,
-        reply_markup=nav_buttons()
+        text, reply_markup=nav_buttons()
     )
     context.user_data["base_msg_id"] = sent.message_id
     return STEP_WITHDRAW_AMOUNT
 
 async def process_withdraw_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Крок 2: користувач вводить суму. Якщо не число — редагуємо з помилкою.
-    Якщо число — зберігаємо та редагуємо повідомлення: “Оберіть метод виведення”.
-    """
-    text = update.message.text.strip()
+    text_in = update.message.text.strip()
     try:
-        amount = float(text)
+        amount = float(text_in)
     except ValueError:
         base_id = context.user_data.get("base_msg_id")
         if base_id:
@@ -60,14 +50,13 @@ async def process_withdraw_amount(update: Update, context: ContextTypes.DEFAULT_
         return STEP_WITHDRAW_AMOUNT
 
     context.user_data["withdraw_amount"] = amount
-
     base_id = context.user_data.get("base_msg_id")
     if base_id:
         try:
             await context.bot.edit_message_text(
                 chat_id=update.effective_chat.id,
                 message_id=base_id,
-                text="Оберіть метод виведення:",
+                text="💳 Оберіть метод виведення:",
                 reply_markup=payment_buttons()
             )
         except BadRequest as e:
@@ -76,10 +65,6 @@ async def process_withdraw_amount(update: Update, context: ContextTypes.DEFAULT_
     return STEP_WITHDRAW_METHOD
 
 async def process_withdraw_method(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Крок 3: користувач обирає метод (callback_data = “Карта” чи “Криптопереказ”).
-    Зберігаємо та редагуємо повідомлення: “Введіть реквізити”.
-    """
     await update.callback_query.answer()
     method = update.callback_query.data
     context.user_data["withdraw_method"] = method
@@ -99,15 +84,11 @@ async def process_withdraw_method(update: Update, context: ContextTypes.DEFAULT_
     return STEP_WITHDRAW_DETAILS
 
 async def process_withdraw_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Крок 4: користувач вводить реквізити.
-    Зберігаємо та редагуємо повідомлення, додаючи кнопку “Підтвердити виведення”.
-    """
     details = update.message.text.strip()
     context.user_data["withdraw_details"] = details
 
     kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton("✅ Підтвердити виведення", callback_data=CB.WITHDRAW_CONFIRM.value)
+        InlineKeyboardButton("✅ Підтвердити", callback_data=CB.WITHDRAW_CONFIRM.value)
     ]])
     base_id = context.user_data.get("base_msg_id")
     if base_id:
@@ -115,7 +96,7 @@ async def process_withdraw_details(update: Update, context: ContextTypes.DEFAULT
             await context.bot.edit_message_text(
                 chat_id=update.effective_chat.id,
                 message_id=base_id,
-                text="✅ Натисніть «Підтвердити виведення», щоб завершити.",
+                text="✅ Натисніть «Підтвердити», щоб завершити:",
                 reply_markup=kb
             )
         except BadRequest as e:
@@ -124,13 +105,8 @@ async def process_withdraw_details(update: Update, context: ContextTypes.DEFAULT
     return STEP_WITHDRAW_CONFIRM
 
 async def confirm_withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Крок 5: користувач натиснув “✅ Підтвердити виведення”.
-    Зберігаємо в БД та редагуємо повідомлення: “Ваш запит збережено…”.
-    """
     await update.callback_query.answer()
     user = update.effective_user
-
     amount  = context.user_data.get("withdraw_amount")
     method  = context.user_data.get("withdraw_method")
     details = context.user_data.get("withdraw_details")
@@ -138,8 +114,8 @@ async def confirm_withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute(
             """
-            INSERT INTO withdrawals 
-              (user_id, username, amount, method, details) 
+            INSERT INTO withdrawals
+              (user_id, username, amount, method, details)
             VALUES (?, ?, ?, ?, ?)
             """,
             (user.id, user.username, amount, method, details)
@@ -147,7 +123,7 @@ async def confirm_withdraw(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conn.commit()
 
     base_id = context.user_data.get("base_msg_id")
-    final_text = "💸 Ваше звернення на виведення збережено! Очікуйте підтвердження від адміністратора."
+    final_text = "💸 Ваше замовлення на виведення отримано. Очікуйте обробки."
     if base_id:
         try:
             await context.bot.edit_message_text(
