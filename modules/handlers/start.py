@@ -4,35 +4,36 @@ from pathlib import Path
 from telegram import Update
 from telegram.ext import CommandHandler, ContextTypes, Application
 from modules.config import ADMIN_ID
-from modules.keyboards import main_menu, admin_panel_kb
+from modules.keyboards import main_menu
 
-# Знаходимо корінь проєкту
+# знаходимо корінь проєкту, щоб мати шлях до assets/welcome.gif
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ASSETS_DIR   = PROJECT_ROOT / "assets"
 GIF_PATH     = ASSETS_DIR / "welcome.gif"
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Реагує на команду /start або на callback_data "home"/"back".
-    Якщо адміністратор — показує адмін-панель. Інакше — звичайне вітання.
+    Якщо адміністратор → кнопка “Адмін-панель”. Інакше – клавіатура client_menu(False).
+    Відправляє welcome.gif або текст.
     """
+    # Якщо це callback_query (натискання «Головне меню» або «Назад»), відповідаємо на нього:
     if update.callback_query:
         await update.callback_query.answer()
 
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
+    # Якщо адмін – надсилаємо тільки «Адмін-панель»
     if user_id == ADMIN_ID:
-        # Адміністратор бачить лише адмін-панель
         await context.bot.send_message(
             chat_id=chat_id,
             text="🛠 Адмін-панель",
-            reply_markup=admin_panel_kb()
+            reply_markup=main_menu(is_admin=True)
         )
         return
 
-    # Інші — звичайне вітання
-    caption = "🎲 Ласкаво просимо до CasinoBot!"
+    # Усі інші користувачі – звичайне вітання та меню
+    caption = "🎲 Ласкаво просимо до BIG GAME MONEY!"
     keyboard = main_menu(is_admin=False)
 
     if GIF_PATH.is_file():
@@ -52,6 +53,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def register_start_handler(app: Application) -> None:
     """
-    Регіструє CommandHandler для /start.
+    Реєструє команду /start у групі 0.
     """
     app.add_handler(CommandHandler("start", start_command), group=0)
