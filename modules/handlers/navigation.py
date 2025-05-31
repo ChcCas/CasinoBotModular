@@ -1,43 +1,27 @@
+# modules/handlers/navigation.py
+
 import sqlite3
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update
 from telegram.ext import CallbackQueryHandler, ContextTypes, Application
-from modules.config import ADMIN_ID, DB_NAME
 from modules.callbacks import CB
 from modules.keyboards import (
-    PROVIDERS,
-    PAYMENTS,
-    nav_buttons,
-    provider_buttons,
-    payment_buttons,
-    admin_panel_kb
+    nav_buttons, main_menu, admin_panel_kb
 )
 from modules.states import (
     STEP_MENU,
     STEP_DEPOSIT_AMOUNT,
     STEP_WITHDRAW_AMOUNT,
-    STEP_REG_NAME,
     STEP_ADMIN_SEARCH,
     STEP_ADMIN_BROADCAST
 )
 from .start import start_command
-from .admin import show_admin_panel, admin_search, admin_broadcast
-
-# Якщо у вас немає окремого модуля registration.py, видаліть цей рядок:
-# from .registration import register_name, register_phone, register_code
-
-# === Якщо потрібна таблиця threads ===
-def _init_threads():
-    conn = sqlite3.connect(DB_NAME)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS threads (
-            user_id INTEGER PRIMARY KEY,
-            base_msg_id INTEGER
-        )
-    """)
-    conn.commit()
-    conn.close()
+from .admin import show_admin_panel
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Універсальний роутер для всіх callback_query, які не перехоплені ConversationHandler-ами групи 0.
+    Якщо нічого не знайдено — повертаємося до start_command (STEP_MENU).
+    """
     query = update.callback_query
     data = query.data
     await query.answer()
@@ -46,50 +30,69 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "admin_panel":
         return await show_admin_panel(update, context)
 
-     # ─── Назад / Головне меню ─── 
+    # ─── «Головне меню» або «◀️ Назад» ───
     if data in (CB.HOME.value, CB.BACK.value):
         return await start_command(update, context)
 
-    # ─── Поповнення ───
+    # ─── Депозит ───
     if data == CB.DEPOSIT_START.value:
-        # імпортуємо start_deposit із deposit.py, якщо треба
-        from .deposit import start_deposit
-        return await start_deposit(update, context)
+        await query.message.reply_text(
+            "💸 Введіть суму для поповнення:", reply_markup=nav_buttons()
+        )
+        return STEP_DEPOSIT_AMOUNT
 
     # ─── Виведення ───
     if data == CB.WITHDRAW_START.value:
-        from .withdraw import start_withdraw
-        return await start_withdraw(update, context)
-
-    # ─── Реєстрація (якщо у вас є registration.py) ───
-    # if data == "register":
-    #     return await register_name(update, context)
+        await query.message.reply_text(
+            "💳 Введіть суму для виведення:", reply_markup=nav_buttons()
+        )
+        return STEP_WITHDRAW_AMOUNT
 
     # ─── Допомога ───
     if data == CB.HELP.value:
         await query.message.reply_text(
-            "ℹ️ Допомога:\n/start — перезапуск\n📲 Питання — через чат",
+            "ℹ️ Допомога:\n/start — перезапуск бота\n📲 Зверніться до підтримки, якщо є питання.",
             reply_markup=nav_buttons()
         )
         return STEP_MENU
 
-    # ─── Адмінський пошук ───
+    # ─── Адмін: Пошук клієнта ───
     if data == CB.ADMIN_SEARCH.value:
-        return await admin_search(update, context)
+        await query.message.reply_text(
+            "🔍 Введіть ID або картку для пошуку:", reply_markup=nav_buttons()
+        )
+        return STEP_ADMIN_SEARCH
 
-    # ─── Адмінська розсилка ───
+    # ─── Адмін: Розсилка ───
     if data == CB.ADMIN_BROADCAST.value:
-        return await admin_broadcast(update, context)
+        await query.message.reply_text(
+            "📢 Введіть текст для розсилки:", reply_markup=nav_buttons()
+        )
+        return STEP_ADMIN_BROADCAST
 
-    # ─── Якщо жодний із пунктів вище не спрацював ───
+    # ─── Якщо нічого не спрацювало ───
     return await start_command(update, context)
 
 def register_navigation_handlers(app: Application):
-    _init_threads()
+    """
+    Реєструємо:
+      1) CallbackQueryHandler(start_command, pattern="^home$")
+      2) CallbackQueryHandler(start_command, pattern="^back$")
+      3) CallbackQueryHandler(menu_handler, pattern=".*")
+    У групі 1, щоб усі CALLBACK, які не потрапили в ConversationHandler- group=0, оброблялися тут.
+    """
+    # 1) Якщо натиснули «Головне меню» / «Назад»
+    app.add_handler(
+        CallbackQueryHandler(start_command, pattern="^home$"),
+        group=1
+    )
+    app.add_handler(
+        CallbackQueryHandler(start_command, pattern="^back$"),
+        group=1
+    )
 
-    # Обробляємо кнопки “home” / “back” окремо (вони одразу кидають на start_command)
-    app.add_handler(CallbackQueryHandler(start_command, pattern="^home$"), group=1)
-    app.add_handler(CallbackQueryHandler(start_command, pattern="^back$"), group=1)
-
-    # Далі обробляємо всі інші callback_query через menu_handler
-    app.add_handler(CallbackQueryHandler(menu_handler, pattern=".*"), group=1)
+    # 2) Все інше — menu_handler
+    app.add_handler(
+        CallbackQueryHandler(menu_handler, pattern=".*"),
+        group=1
+    )
