@@ -7,7 +7,6 @@ from telegram.ext import (
     ConversationHandler,
     filters,
     ContextTypes,
-    Application
 )
 from modules.config import ADMIN_ID
 from modules.keyboards import nav_buttons
@@ -15,10 +14,6 @@ from modules.callbacks import CB
 from modules.states import STEP_FIND_CARD_PHONE
 
 async def start_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Entry point: користувач натиснув “💳 Мій профіль”.
-    Запитуємо номер клубної картки.
-    """
     await update.callback_query.answer()
     msg = await update.callback_query.message.reply_text(
         "💳 Введіть номер вашої клубної картки:",
@@ -28,15 +23,10 @@ async def start_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_FIND_CARD_PHONE
 
 async def find_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Обробка введеного номера картки:
-     1) надсилаємо адміну повідомлення з кнопкою підтвердження;
-     2) інформуємо користувача, що запит відправлено.
-    """
     card = update.message.text.strip()
     user_id = update.effective_user.id
 
-    # 1) Надсилаємо адміну запит із callback для підтвердження
+    # Надсилаємо адміну запит
     kb = InlineKeyboardMarkup([[
         InlineKeyboardButton(
             "✅ Підтвердити картку",
@@ -53,16 +43,15 @@ async def find_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=kb
     )
 
-    # 2) Повідомляємо клієнта
+    # Інформуємо користувача
     await update.message.reply_text(
         "✅ Ваш запит відправлено адміністратору. Очікуйте підтвердження.",
         reply_markup=nav_buttons()
     )
 
-    # Завершуємо сценарій
+    # Завершуємо розмову
     return ConversationHandler.END
 
-# ConversationHandler для “Мій профіль”
 profile_conv = ConversationHandler(
     entry_points=[
         CallbackQueryHandler(start_profile, pattern=f"^{CB.CLIENT_PROFILE.value}$")
@@ -78,10 +67,3 @@ profile_conv = ConversationHandler(
     ],
     per_message=True,
 )
-
-def register_profile_handlers(app: Application) -> None:
-    """
-    Реєструє ConversationHandler для сценарію профілю.
-    Менша група (0) дає пріоритет цьому конвеєру над загальним роутером.
-    """
-    app.add_handler(profile_conv, group=0)
