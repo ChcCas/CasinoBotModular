@@ -11,7 +11,6 @@ from modules.handlers.admin import register_admin_handlers
 from modules.handlers.profile import register_profile_handlers
 from modules.handlers.deposit import register_deposit_handlers
 from modules.handlers.withdraw import register_withdraw_handlers
-# Видалено: з файлу registration.py, оскільки такого немає
 from modules.handlers.navigation import register_navigation_handlers
 
 # ─── Налаштування логування ───────────────────────────────────────────────────
@@ -34,7 +33,8 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_error_handler(error_handler)
 
-    # 3) Реєструємо /start та адмін-хендлери (групи 0 і 1 діляться всередині)
+    # 3) Реєструємо /start та адмін-хендлери
+    #    (register_start_handler додає лише один CommandHandler("start", start_command))
     register_start_handler(app)
     register_admin_handlers(app)
 
@@ -43,7 +43,7 @@ def main():
     register_deposit_handlers(app)
     register_withdraw_handlers(app)
 
-    # 5) Реєструємо загальний роутер кнопок (home/back/help тощо, group=1)
+    # 5) Реєструємо загальний роутер кнопок (home/back/help тощо, група 1)
     register_navigation_handlers(app)
 
     # 6) Запускаємо бот у режимі webhook
