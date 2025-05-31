@@ -8,10 +8,10 @@ from modules.db import init_db
 
 from modules.handlers.start import register_start_handler
 from modules.handlers.admin import register_admin_handlers
-
+from modules.handlers.profile import profile_conv
 from modules.handlers.deposit import deposit_conv
 from modules.handlers.withdraw import withdraw_conv
-from modules.handlers.profile import profile_conv
+from modules.handlers.registration import registration_conv  # ваш сценарій реєстрації
 from modules.handlers.navigation import register_navigation_handlers
 
 logging.basicConfig(
@@ -24,10 +24,10 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.error("Exception while handling update:", exc_info=context.error)
 
 def main():
-    # 1) Ініціалізуємо БД
+    # 1) Ініціалізуємо базу даних
     init_db()
 
-    # 2) Створюємо Application
+    # 2) Створюємо Telegram Application
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_error_handler(error_handler)
 
@@ -35,15 +35,17 @@ def main():
     register_start_handler(app)
     register_admin_handlers(app)
 
-    # 4) Реєструємо ConversationHandler’и і загальний роутер
-    #    ВАЖЛИВО: саме в такому порядку і з відповідними групами
+    # 4) Реєструємо ConversationHandler’и (група 0)
     app.add_handler(profile_conv, group=0)
     app.add_handler(deposit_conv, group=0)
     app.add_handler(withdraw_conv, group=0)
+    app.add_handler(registration_conv, group=0)
+    # (і ще додайте сюди будь-які інші окремі ConversationHandler)
 
-    register_navigation_handlers(app)  # це додає menu_router у group=1
+    # 5) Реєструємо загальний роутер (група 1)
+    register_navigation_handlers(app)
 
-    # 5) Налаштовуємо webhook
+    # 6) Запускаємо у webhook-режимі
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
