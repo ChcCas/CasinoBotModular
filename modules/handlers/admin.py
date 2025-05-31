@@ -11,17 +11,16 @@ from modules.states import STEP_MENU, STEP_ADMIN_SEARCH, STEP_ADMIN_BROADCAST
 
 async def admin_confirm_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Обробляє callback_data = "admin_confirm_card:<user_id>:<card>".
-    1) Зберігає картку у базі через authorize_card(...)
-    2) Повідомляє клієнта, що його картка підтверджена, та показує client_menu(is_authorized=True)
-    3) Редагує оригінальне повідомлення адміну, підтверджуючи операцію.
+    Обробляє callback_data="admin_confirm_card:<user_id>:<card>".
+    1) Зберігаємо картку у базі (authorize_card).
+    2) Повідомляємо клієнта, що картка підтверджена, і показуємо client_menu(is_authorized=True).
+    3) Редагуємо повідомлення адміну.
     """
     await update.callback_query.answer()
-    # callback_data формату "admin_confirm_card:12345:4000123412341234"
     _, user_id_str, card = update.callback_query.data.split(":", 2)
     user_id = int(user_id_str)
 
-    # 1) Зберігаємо картку у таблиці clients
+    # 1) Зберігаємо картку
     authorize_card(user_id, card)
 
     # 2) Повідомляємо клієнта
@@ -37,14 +36,14 @@ async def admin_confirm_card(update: Update, context: ContextTypes.DEFAULT_TYPE)
             text=f"✅ Картка {card} для користувача {user_id} підтверджена."
         )
     except BadRequest as e:
-        if "Message is not modified" not in str(e):
+        msg = str(e)
+        if "Message is not modified" not in msg and "Message to edit not found" not in msg:
             raise
-
     return
 
 async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Відображає головне повідомлення адмін-панелі з клавіатурою admin_panel_kb.
+    Показує головне повідомлення адмін-панелі з клавіатурою admin_panel_kb.
     """
     await update.callback_query.answer()
     text = "🛠 Адмін-панель:"
@@ -55,15 +54,134 @@ async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["base_msg_id"] = sent.message_id
     return STEP_ADMIN_SEARCH
 
-# ... (інші адмінські хендлери: admin_search, admin_search_result, admin_broadcast) ...
+async def admin_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Коли адміністратор натиснув “🔍 Пошук клієнта” (callback_data="admin_search").
+    Редагуємо повідомлення та переводимо у стан STEP_ADMIN_BROADCAST (очікуємо введення).
+    """
+    await update.callback_query.answer()
+    base_id = context.user_data.get("base_msg_id")
+    new_text = "🔍 Введіть ID або картку для пошуку:"
+    if base_id:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=update.effective_chat.id,
+                message_id=base_id,
+                text=new_text,
+                reply_markup=nav_buttons()
+            )
+        except BadRequest as e:
+            msg = str(e)
+            if "Message to edit not found" in msg or "Message is not modified" in msg:
+                sent = await update.callback_query.message.reply_text(
+                    new_text,
+                    reply_markup=nav_buttons()
+                )
+                context.user_data["base_msg_id"] = sent.message_id
+            else:
+                raise
+    return STEP_ADMIN_BROADCAST
+
+async def admin_search_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обробляє введення admin (MessageHandler). Пошук у БД через search_user.
+    """
+    query = update.message.text.strip()
+    user = search_user(query)
+    if user:
+        text = (
+            f"👤 Знайдено клієнта:\n"
+            f"• user_id: {user['user_id']}\n"
+            f"• card: {user['card']}\n"
+            f"• phone: {user['phone'] or 'Не вказано'}"
+        )
+    else:
+        text = "❌ Клієнта з таким ID або карткою не знайдено."
+
+    base_id = context.user_data.get("base_msg_id")
+    if base_id:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=update.effective_chat.id,
+                message_id=base_id,
+                text=text,
+                reply_markup=nav_buttons()
+            )
+        except BadRequest as e:
+            msg = str(e)
+            if "Message to edit not found" in msg or "Message is not modified" in msg:
+                sent = await update.message.reply_text(
+                    text,
+                    reply_markup=nav_buttons()
+                )
+                context.user_data["base_msg_id"] = sent.message_id
+            else:
+                raise
+    return STEP_MENU
+
+async def admin_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обробляє callback “📢 Розсилка” та сам текст для розсилки:
+    - Якщо це callback_query → запитуємо текст для розсилки.
+    - Якщо це MessageHandler (адмін вставив текст) → робимо broadcast_to_all.
+    """
+    if update.callback_query:
+        await update.callback_query.answer()
+        base_id = context.user_data.get("base_msg_id")
+        new_text = "📢 Введіть текст для розсилки всім клієнтам:"
+        if base_id:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=update.effective_chat.id,
+                    message_id=base_id,
+                    text=new_text,
+                    reply_markup=nav_buttons()
+                )
+            except BadRequest as e:
+                msg = str(e)
+                if "Message to edit not found" in msg or "Message is not modified" in msg:
+                    sent = await update.callback_query.message.reply_text(
+                        new_text,
+                        reply_markup=nav_buttons()
+                    )
+                    context.user_data["base_msg_id"] = sent.message_id
+                else:
+                    raise
+        return STEP_ADMIN_BROADCAST
+
+    # Якщо це текст (MessageHandler)
+    text_to_send = update.message.text.strip()
+    broadcast_to_all(text_to_send)
+
+    base_id = context.user_data.get("base_msg_id")
+    final_text = "✅ Розсилка успішно відправлена всім клієнтам."
+    if base_id:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=update.effective_chat.id,
+                message_id=base_id,
+                text=final_text,
+                reply_markup=nav_buttons()
+            )
+        except BadRequest as e:
+            msg = str(e)
+            if "Message to edit not found" in msg or "Message is not modified" in msg:
+                sent = await update.message.reply_text(
+                    final_text,
+                    reply_markup=nav_buttons()
+                )
+                context.user_data["base_msg_id"] = sent.message_id
+            else:
+                raise
+    return STEP_MENU
 
 def register_admin_handlers(app: Application) -> None:
     """
-    Додає всі CallbackQueryHandler та MessageHandler для адмінського функціоналу:
-      1) Підтвердження картки клієнта (admin_confirm_card)
-      2) Відображення адмін-панелі (show_admin_panel)
-      3) Пошук клієнта (admin_search + admin_search_result)
-      4) Розсилка (admin_broadcast)
+    Регіструємо всі адмінські хендлери (група 0):
+      1) admin_confirm_card
+      2) show_admin_panel
+      3) admin_search + admin_search_result
+      4) admin_broadcast (callback + текст)
     """
     app.add_handler(
         CallbackQueryHandler(admin_confirm_card, pattern=r"^admin_confirm_card:\d+:.+"),
@@ -73,4 +191,19 @@ def register_admin_handlers(app: Application) -> None:
         CallbackQueryHandler(show_admin_panel, pattern="^admin_panel$"),
         group=0
     )
-    # ... реєстрація інших адмінських хендлерів (admin_search, admin_search_result, admin_broadcast) ...
+    app.add_handler(
+        CallbackQueryHandler(admin_search, pattern=f"^{CB.ADMIN_SEARCH.value}$"),
+        group=0
+    )
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, admin_search_result),
+        group=0
+    )
+    app.add_handler(
+        CallbackQueryHandler(admin_broadcast, pattern=f"^{CB.ADMIN_BROADCAST.value}$"),
+        group=0
+    )
+    app.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, admin_broadcast),
+        group=0
+    )
