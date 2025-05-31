@@ -12,15 +12,18 @@ ASSETS_DIR   = PROJECT_ROOT / "assets"
 GIF_PATH     = ASSETS_DIR / "welcome.gif"
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Якщо це callback_query (наприклад, адмін натиснув кнопку) — відповідаємо на неї
+    """
+    Реагує на команду /start або на callback_data "home"/"back".
+    Якщо адміністратор — показує адмін-панель. Інакше — звичайне вітання.
+    """
     if update.callback_query:
         await update.callback_query.answer()
 
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    # Адміністратор бачить лише адмін-панель
     if user_id == ADMIN_ID:
+        # Адміністратор бачить лише адмін-панель
         await context.bot.send_message(
             chat_id=chat_id,
             text="🛠 Адмін-панель",
@@ -51,4 +54,4 @@ def register_start_handler(app: Application) -> None:
     """
     Регіструє CommandHandler для /start.
     """
-    app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("start", start_command), group=0)
