@@ -30,13 +30,12 @@ async def start_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def find_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Обробка введеного номера картки:
-     1) надсилаємо адміну повідомлення з кнопкою підтвердження;
-     2) інформуємо користувача, що запит відправлено.
+     1) Надсилаємо адміну повідомлення з callback “admin_confirm_card:<user_id>:<card>”
+     2) Інформуємо користувача, що запит відправлено.
     """
     card = update.message.text.strip()
     user_id = update.effective_user.id
 
-    # 1) Надсилаємо адміну запит із callback для підтвердження
     kb = InlineKeyboardMarkup([[
         InlineKeyboardButton(
             "✅ Підтвердити картку",
@@ -53,16 +52,13 @@ async def find_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=kb
     )
 
-    # 2) Повідомляємо клієнта
     await update.message.reply_text(
         "✅ Ваш запит відправлено адміністратору. Очікуйте підтвердження.",
         reply_markup=nav_buttons()
     )
 
-    # Завершуємо сценарій
     return ConversationHandler.END
 
-# ConversationHandler для “Мій профіль”
 profile_conv = ConversationHandler(
     entry_points=[
         CallbackQueryHandler(start_profile, pattern=f"^{CB.CLIENT_PROFILE.value}$")
@@ -76,7 +72,7 @@ profile_conv = ConversationHandler(
         CallbackQueryHandler(start_profile, pattern=f"^{CB.BACK.value}$"),
         CallbackQueryHandler(start_profile, pattern=f"^{CB.HOME.value}$"),
     ],
-    per_chat=True,  # <-- Замість per_message=True
+    per_chat=True,
 )
 
 def register_profile_handlers(app: "Application") -> None:
