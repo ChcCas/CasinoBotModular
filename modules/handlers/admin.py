@@ -20,7 +20,7 @@ from modules.states import (
     STEP_ADMIN_BROADCAST
 )
 
-# ───────────────────────────────────────────────────────────────────────────────
+# ─── 1) Показ адмін-панелі ────────────────────────────────────────────────────────
 async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Викликається, коли адміністратор натискає кнопку “🛠 Адмін-панель”.
@@ -33,7 +33,7 @@ async def show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return STEP_MENU
 
-# ───────────────────────────────────────────────────────────────────────────────
+# ─── 2) Адмінський пошук клієнта ──────────────────────────────────────────────────
 async def admin_search_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Адмін натиснув “🔍 Пошук клієнта”.
@@ -82,7 +82,7 @@ async def admin_search_find(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("admin_search_msg", None)
     return ConversationHandler.END
 
-# ───────────────────────────────────────────────────────────────────────────────
+# ─── 3) Адмінська розсилка ───────────────────────────────────────────────────────
 async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Адмін натиснув “📢 Розсилка”.
@@ -133,7 +133,7 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data.pop("admin_broadcast_msg", None)
     return ConversationHandler.END
 
-# ───────────────────────────────────────────────────────────────────────────────
+# ─── 4) Підтвердження картки адміністратором ────────────────────────────────────
 async def admin_confirm_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Отримує callback_data “admin_confirm_card:<user_id>:<card>”.
@@ -143,22 +143,19 @@ async def admin_confirm_card(update: Update, context: ContextTypes.DEFAULT_TYPE)
     _, user_id_str, card = update.callback_query.data.split(":", 2)
     user_id = int(user_id_str)
 
-    # 1) Зберігаємо в БД (ставимо confirmed=1)
     authorize_card(user_id, card)
 
-    # 2) Повідомляємо клієнта
     await context.bot.send_message(
         chat_id=user_id,
         text=f"🎉 Ваша картка {card} підтверджена. Ви успішно авторизовані.",
         reply_markup=client_menu(is_authorized=True)
     )
 
-    # 3) Оновлюємо повідомлення адміну
     await update.callback_query.message.edit_text(
         f"✅ Картка {card} для користувача {user_id} підтверджена."
     )
 
-# ───────────────────────────────────────────────────────────────────────────────
+# ─── 5) Реєстрація адмін-хендлерів ────────────────────────────────────────────────
 def register_admin_handlers(app: Application) -> None:
     """
     Реєструє:
@@ -170,7 +167,7 @@ def register_admin_handlers(app: Application) -> None:
 
     # 1) Показ адмін-панелі
     app.add_handler(
-        CallbackQueryHandler(show_admin_panel, pattern="^admin_panel$"),
+        CallbackQueryHandler(show_admin_panel, pattern="^admin_panel$", block=False),
         group=1
     )
 
@@ -186,7 +183,7 @@ def register_admin_handlers(app: Application) -> None:
     # 3) ConversationHandler для пошуку клієнта
     admin_search_conv = ConversationHandler(
         entry_points=[
-            CallbackQueryHandler(admin_search_start, pattern="^admin_search$")
+            CallbackQueryHandler(admin_search_start, pattern=f"^{CB.ADMIN_SEARCH.value}$", block=False)
         ],
         states={
             STEP_ADMIN_SEARCH: [
@@ -194,17 +191,17 @@ def register_admin_handlers(app: Application) -> None:
             ],
         },
         fallbacks=[
-            CallbackQueryHandler(show_admin_panel, pattern=f"^{CB.BACK.value}$"),
-            CallbackQueryHandler(show_admin_panel, pattern=f"^{CB.HOME.value}$")
+            CallbackQueryHandler(show_admin_panel, pattern=f"^{CB.BACK.value}$", block=False),
+            CallbackQueryHandler(show_admin_panel, pattern=f"^{CB.HOME.value}$", block=False)
         ],
-        per_chat=True,  # <-- Замість per_message=True
+        per_chat=True,
     )
     app.add_handler(admin_search_conv, group=0)
 
     # 4) ConversationHandler для адмін-розсилки
     admin_broadcast_conv = ConversationHandler(
         entry_points=[
-            CallbackQueryHandler(admin_broadcast_start, pattern="^admin_broadcast$")
+            CallbackQueryHandler(admin_broadcast_start, pattern=f"^{CB.ADMIN_BROADCAST.value}$", block=False)
         ],
         states={
             STEP_ADMIN_BROADCAST: [
@@ -212,9 +209,9 @@ def register_admin_handlers(app: Application) -> None:
             ],
         },
         fallbacks=[
-            CallbackQueryHandler(show_admin_panel, pattern=f"^{CB.BACK.value}$"),
-            CallbackQueryHandler(show_admin_panel, pattern=f"^{CB.HOME.value}$")
+            CallbackQueryHandler(show_admin_panel, pattern=f"^{CB.BACK.value}$", block=False),
+            CallbackQueryHandler(show_admin_panel, pattern=f"^{CB.HOME.value}$", block=False)
         ],
-        per_chat=True,  # <-- Замість per_message=True
+        per_chat=True,
     )
     app.add_handler(admin_broadcast_conv, group=0)
