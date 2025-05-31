@@ -8,9 +8,34 @@ PAYMENTS  = ["Карта", "Криптопереказ"]
 
 def nav_buttons():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("◀️ Назад",       callback_data=CB.BACK.value)],
-        [InlineKeyboardButton("🏠 Головне меню", callback_data=CB.HOME.value)],
+        [InlineKeyboardButton("◀️ Назад",        callback_data=CB.BACK.value)],
+        [InlineKeyboardButton("🏠 Головне меню",  callback_data=CB.HOME.value)],
     ])
+
+
+def provider_buttons():
+    """
+    Клавіатура вибору провайдера (для депозиту).
+    """
+    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS]
+    kb.append([
+        InlineKeyboardButton("◀️ Назад",        callback_data=CB.BACK.value),
+        InlineKeyboardButton("🏠 Головне меню",  callback_data=CB.HOME.value),
+    ])
+    return InlineKeyboardMarkup(kb)
+
+
+def payment_buttons():
+    """
+    Клавіатура вибору методу оплати / виведення.
+    """
+    kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PAYMENTS]
+    kb.append([
+        InlineKeyboardButton("◀️ Назад",        callback_data=CB.BACK.value),
+        InlineKeyboardButton("🏠 Головне меню",  callback_data=CB.HOME.value),
+    ])
+    return InlineKeyboardMarkup(kb)
+
 
 def client_menu(is_authorized: bool):
     if not is_authorized:
@@ -31,6 +56,7 @@ def client_menu(is_authorized: bool):
             [InlineKeyboardButton("ℹ️ Допомога",          callback_data=CB.HELP.value)],
         ])
 
+
 def main_menu(is_admin: bool):
     if is_admin:
         return InlineKeyboardMarkup([
@@ -40,11 +66,12 @@ def main_menu(is_admin: bool):
     else:
         return client_menu(is_authorized=False)
 
+
 def admin_panel_kb():
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("💰 Депозити",       callback_data="admin_deposits"),
-            InlineKeyboardButton("👤 Користувачі",     callback_data="admin_users"),
+            InlineKeyboardButton("👤 Користувачі",    callback_data="admin_users"),
         ],
         [
             InlineKeyboardButton("📄 Виведення",       callback_data="admin_withdrawals"),
