@@ -12,7 +12,7 @@ from telegram.ext import (
 )
 from modules.config import DB_NAME
 from modules.callbacks import CB
-from modules.keyboards import nav_buttons, provider_buttons, payment_buttons
+from modules.keyboards import nav_buttons, provider_buttons, payment_buttons, PROVIDERS, PAYMENTS
 from modules.states import (
     STEP_DEPOSIT_AMOUNT,
     STEP_DEPOSIT_PROVIDER,
@@ -28,7 +28,7 @@ async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     await update.callback_query.answer()
     await update.callback_query.message.reply_text(
-        "💸 Введіть суму для поповнення:", 
+        "💸 Введіть суму для поповнення:",
         reply_markup=nav_buttons()
     )
     return STEP_DEPOSIT_AMOUNT
@@ -51,7 +51,7 @@ async def process_deposit_amount(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data["deposit_amount"] = amount
     # Далі – вибір провайдера
     await update.message.reply_text(
-        "🎰 Оберіть провайдера:", 
+        "🎰 Оберіть провайдера:",
         reply_markup=provider_buttons()
     )
     return STEP_DEPOSIT_PROVIDER
@@ -67,22 +67,23 @@ async def process_deposit_provider(update: Update, context: ContextTypes.DEFAULT
 
     # Далі – вибір методу оплати
     await update.callback_query.message.reply_text(
-        "💳 Оберіть метод оплати:", 
+        "💳 Оберіть метод оплати:",
         reply_markup=payment_buttons()
     )
     return STEP_DEPOSIT_PAYMENT
 
 async def process_deposit_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Крок STEP_DEPOSIT_PAYMENT: користувач натиснув тему оплат (callback_data == "Карта" чи "Криптопереказ").
+    Крок STEP_DEPOSIT_PAYMENT: користувач натиснув кнопку методу оплати 
+    (callback_data == "Карта" чи "Криптопереказ").
     """
     await update.callback_query.answer()
     payment_method = update.callback_query.data
     context.user_data["deposit_payment"] = payment_method
 
-    # Далі – просимо надіслати фото/документ із підтвердженням
+    # Далі – просимо надіслати фото/документ/відео із підтвердженням
     await update.callback_query.message.reply_text(
-        "📎 Надішліть підтвердження (фото, документ або відео):", 
+        "📎 Надішліть підтвердження (фото, документ або відео):",
         reply_markup=nav_buttons()
     )
     return STEP_DEPOSIT_FILE
@@ -90,8 +91,7 @@ async def process_deposit_payment(update: Update, context: ContextTypes.DEFAULT_
 async def process_deposit_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Крок STEP_DEPOSIT_FILE: користувач надсилає фото/документ/відео.
-    Зберігаємо у тимчасовий контекст (можна зберегти file_id).
-    Потім відправляємо клавіатуру із кнопкою “Підтвердити”.
+    Зберігаємо у тимчасовий контекст (file_id) і показуємо кнопку “Підтвердити”.
     """
     if update.message.photo:
         ftype = "photo"
@@ -117,15 +117,15 @@ async def process_deposit_file(update: Update, context: ContextTypes.DEFAULT_TYP
                              callback_data=CB.DEPOSIT_CONFIRM.value)
     ]])
     await update.message.reply_text(
-        "✅ Дякуємо! Натисніть «Підтвердити», щоб завершити поповнення.", 
+        "✅ Дякуємо! Натисніть «Підтвердити», щоб завершити поповнення.",
         reply_markup=kb
     )
     return STEP_DEPOSIT_CONFIRM
 
 async def confirm_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Крок STEP_DEPOSIT_CONFIRM: користувач натиснув “✅ Підтвердити” (callback_data="deposit_confirm").
-    Зберігаємо інформацію в БД і повідомляємо, що чекати підтвердження.
+    Крок STEP_DEPOSIT_CONFIRM: користувач натиснув «✅ Підтвердити» (callback_data="deposit_confirm").
+    Зберігаємо все в БД і повідомляємо, що чекати підтвердження.
     """
     await update.callback_query.answer()
     user = update.effective_user
@@ -137,10 +137,14 @@ async def confirm_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ftype    = context.user_data.get("deposit_file_type")
     file_id  = context.user_data.get("deposit_file_id")
 
-    # Приклад збереження в SQLite (таблиця deposits має бути створена раніше)
+    # Приклад збереження в SQLite (таблиця deposits повинна існувати)
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute(
-            "INSERT INTO deposits (user_id, username, amount, provider, payment_method, file_type, file_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            """
+            INSERT INTO deposits 
+              (user_id, username, amount, provider, payment_method, file_type, file_id) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
             (user.id, user.username, amount, provider, payment, ftype, file_id)
         )
         conn.commit()
@@ -151,6 +155,7 @@ async def confirm_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return ConversationHandler.END
 
+# ─── ConversationHandler для “Поповнення” ────────────────────────────────────────
 deposit_conv = ConversationHandler(
     entry_points=[
         CallbackQueryHandler(deposit_start, pattern=f"^{CB.DEPOSIT_START.value}$")
@@ -163,10 +168,11 @@ deposit_conv = ConversationHandler(
         STEP_DEPOSIT_CONFIRM:  [CallbackQueryHandler(confirm_deposit, pattern=f"^{CB.DEPOSIT_CONFIRM.value}$")],
     },
     fallbacks=[
+        # Якщо користувач натисне «Назад» або «Головне меню», завершуємо сценарій
         CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.BACK.value}$"),
         CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern=f"^{CB.HOME.value}$"),
     ],
-    per_chat=True,
+    per_chat=True,  # щоб усі повідомлення цього чату відслідковувалися у межах одного Conversation
 )
 
 def register_deposit_handlers(app: Application) -> None:
