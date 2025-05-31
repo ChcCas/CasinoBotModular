@@ -26,7 +26,7 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
 
 # ─── Точка входу ────────────────────────────────────────────────────────────────
 def main():
-    # 1) Ініціалізуємо базу даних (створюємо таблиці, якщо їх немає)
+    # 1) Ініціалізуємо БД (створюємо таблиці, якщо їх немає)
     init_db()
 
     # 2) Створюємо Telegram Application із токеном
@@ -34,16 +34,15 @@ def main():
     app.add_error_handler(error_handler)
 
     # 3) Реєструємо /start та адмін-хендлери
-    #    (register_start_handler додає лише один CommandHandler("start", start_command))
     register_start_handler(app)
     register_admin_handlers(app)
 
-    # 4) Реєструємо клієнтські ConversationHandler’и (група 0)
+    # 4) Регіструємо клієнтські ConversationHandler’и (група 0)
     register_profile_handlers(app)
     register_deposit_handlers(app)
     register_withdraw_handlers(app)
 
-    # 5) Реєструємо загальний роутер кнопок (home/back/help тощо, група 1)
+    # 5) Регіструємо загальний роутер кнопок (home/back/help тощо, група 1)
     register_navigation_handlers(app)
 
     # 6) Запускаємо бот у режимі webhook
