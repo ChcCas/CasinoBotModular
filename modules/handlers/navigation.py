@@ -29,7 +29,7 @@ from modules.states import (
 from .start import start_command
 from .admin import show_admin_panel
 
-# === Ініціалізація таблиці threads ===
+# === Ініціалізація таблиці threads (якщо потрібно) ===
 def _init_threads():
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
@@ -40,7 +40,7 @@ def _init_threads():
         """)
         conn.commit()
 
-# === Основна логіка меню (Router для всіх callback_query) ===
+# === Основна логіка меню (Роутер для всіх callback_query) ===
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
@@ -55,14 +55,14 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await start_command(update, context)
 
     # ─── Поповнення ───
-    if data == "deposit":
+    if data == CB.DEPOSIT_START.value:
         await query.message.reply_text(
             "💸 Введіть суму для поповнення:", reply_markup=nav_buttons()
         )
         return STEP_DEPOSIT_AMOUNT
 
     # ─── Виведення коштів ───
-    if data in ("withdraw", CB.WITHDRAW_START.value):
+    if data == CB.WITHDRAW_START.value:
         await query.message.reply_text(
             "💳 Введіть суму для виведення:", reply_markup=nav_buttons()
         )
@@ -84,11 +84,11 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return STEP_MENU
 
     # ─── Адмін: пошук користувача ───
-    if data == "admin_search":
+    if data == CB.ADMIN_SEARCH.value:
         return STEP_ADMIN_SEARCH
 
     # ─── Адмін: розсилка ───
-    if data == "admin_broadcast":
+    if data == CB.ADMIN_BROADCAST.value:
         return STEP_ADMIN_BROADCAST
 
     # ─── Якщо нічого не збіглось ───
@@ -98,10 +98,7 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def register_navigation_handlers(app: Application):
     _init_threads()
 
-    # УВАГА: ми ТУТ БІЛЬШЕ НЕ РЕЄСТРУЄМО CommandHandler("start")
-    #          — /start уже обробляється лише в register_start_handler(app).
-
-    # Обробка кнопок “home” та “back”:
+    # Обробка кнопок “home” та “back” (реакція на аналогічні callback_data)
     app.add_handler(
         CallbackQueryHandler(start_command, pattern="^home$"),
         group=1
