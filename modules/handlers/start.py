@@ -12,8 +12,11 @@ GIF_PATH     = ASSETS_DIR / "welcome.gif"
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Обробка /start або натискання кнопки “Головне меню”/“Назад”.
-    Надсилає або редагує єдине повідомлення з головним меню.
+    Обробник /start або кнопок «Головне меню/Назад».
+    Якщо це адмін — показуємо адмін-панель.
+    Якщо це клієнт — показуємо головне меню (неавторизованому).
+    Ми зберігаємо message_id у user_data["base_msg_id"], щоб наступного разу можна було редагувати це ж повідомлення,
+    замість відправляти заново ланцюг нових.
     """
     if update.callback_query:
         await update.callback_query.answer()
@@ -21,7 +24,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
 
-    # Якщо адміністратор — показуємо адмін-панель
     if user_id == ADMIN_ID:
         text = "🛠 Адмін-панель"
         keyboard = admin_panel_kb()
@@ -31,8 +33,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     base_id = context.user_data.get("base_msg_id")
     if base_id:
-        # Спробуємо редагувати існуюче повідомлення
         try:
+            # Спроба відредагувати старе повідомлення
             await context.bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=base_id,
@@ -40,20 +42,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=keyboard
             )
         except BadRequest as e:
-            # Якщо «Message is not modified», ігноруємо, інакше кидаємо далі
+            # Якщо воно було видалене або текст не змінився, просто пришлемо нове:
             if "Message is not modified" not in str(e):
-                raise
+                sent = await update.effective_chat.send_message(text=text, reply_markup=keyboard)
+                context.user_data["base_msg_id"] = sent.message_id
     else:
-        sent = await update.effective_chat.send_message(
-            text=text,
-            reply_markup=keyboard
-        )
+        sent = await update.effective_chat.send_message(text=text, reply_markup=keyboard)
         context.user_data["base_msg_id"] = sent.message_id
 
     return STEP_MENU
 
 def register_start_handler(app: Application) -> None:
-    """
-    Регіструє CommandHandler для /start (група=0).
-    """
     app.add_handler(CommandHandler("start", start_command), group=0)
