@@ -5,11 +5,10 @@ import sqlite3
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     CallbackQueryHandler,
-    CommandHandler,
     ContextTypes,
     Application
 )
-from modules.config import ADMIN_ID, DB_NAME
+from modules.config import DB_NAME
 from modules.callbacks import CB
 from modules.keyboards import (
     PROVIDERS,
@@ -99,11 +98,10 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def register_navigation_handlers(app: Application):
     _init_threads()
 
-    # Команда /start та натискання кнопок “home”/“back” викликає start_command
-    app.add_handler(
-        CommandHandler("start", start_command),
-        group=1
-    )
+    # УВАГА: ми ТУТ БІЛЬШЕ НЕ РЕЄСТРУЄМО CommandHandler("start")
+    #          — /start уже обробляється лише в register_start_handler(app).
+
+    # Обробка кнопок “home” та “back”:
     app.add_handler(
         CallbackQueryHandler(start_command, pattern="^home$"),
         group=1
