@@ -3,8 +3,8 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from modules.callbacks import CB
 
-# Для депозиту/виведення
-PROVIDERS = ["🏆 CHAMPION", "🎰 SUPEROMATIC"]
+# Для депозиту/виведення: відображені назви провайдерів
+PROVIDERS = ["СТАРА СИСТЕМА", "НОВА СИСТЕМА"]
 PAYMENTS  = ["Карта", "Криптопереказ"]
 
 def nav_buttons() -> InlineKeyboardMarkup:
@@ -17,6 +17,10 @@ def nav_buttons() -> InlineKeyboardMarkup:
     ])
 
 def provider_buttons() -> InlineKeyboardMarkup:
+    """
+    Клавіатура вибору провайдера (для депозиту),
+    але відображаємо “СТАРА СИСТЕМА” / “НОВА СИСТЕМА”.
+    """
     kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PROVIDERS]
     kb.append([
         InlineKeyboardButton("◀️ Назад",       callback_data=CB.BACK.value),
@@ -25,6 +29,9 @@ def provider_buttons() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(kb)
 
 def payment_buttons() -> InlineKeyboardMarkup:
+    """
+    Клавіатура вибору методу оплати / виведення.
+    """
     kb = [[InlineKeyboardButton(p, callback_data=p)] for p in PAYMENTS]
     kb.append([
         InlineKeyboardButton("◀️ Назад",       callback_data=CB.BACK.value),
@@ -60,7 +67,7 @@ def main_menu(is_admin: bool) -> InlineKeyboardMarkup:
     """
     Головне меню /start:
     - Якщо is_admin=True → показуємо “🛠 Адмін-панель”.
-    - Інакше → menu клієнта, як неавторизованого.
+    - Інакше → меню неавторизованого клієнта.
     """
     if is_admin:
         return InlineKeyboardMarkup([
