@@ -25,31 +25,34 @@ def main():
     # 1) Ініціалізуємо БД (створюємо таблиці, якщо їх немає)
     init_db()
 
-    # 2) Створюємо Telegram Application із токеном
+    # 2) Створюємо Telegram Application
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # 3) Додаємо глобальний обробник помилок
+    # 3) Записуємо бот-екземпляр у config (для broadcast)
+    import modules.config as config_module
+    config_module.BOT_INSTANCE = app.bot
+
+    # 4) Додаємо глобальний обробник помилок
     app.add_error_handler(error_handler)
 
-    # 4) Регіструємо /start та адмін-хендлери (група=0)
+    # 5) Регіструємо /start та адмінські хендлери (group = 0)
     register_start_handler(app)
     register_admin_handlers(app)
 
-    # 5) Регіструємо клієнтські ConversationHandler-и (група=0)
+    # 6) Регіструємо клієнтські ConversationHandler-и (group = 0)
     register_profile_handlers(app)
     register_deposit_handlers(app)
     register_withdraw_handlers(app)
 
-    # 6) Регіструємо загальний роутер кнопок (home/back/help тощо, група=1)
+    # 7) Регіструємо загальний роутер кнопок (home/back тощо, group = 1)
     register_navigation_handlers(app)
 
-    # 7) Запускаємо бот у режимі webhook
-    #    Тут ми більше не використовуємо Flask; Telegram одразу шле запити на цей webhook.
+    # 8) Запускаємо webhook:
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
         url_path="webhook",
-        webhook_url=WEBHOOK_URL,
+        webhook_url=WEBHOOK_URL
     )
 
 if __name__ == "__main__":
