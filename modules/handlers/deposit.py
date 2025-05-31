@@ -2,6 +2,7 @@
 
 import sqlite3
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 from telegram.ext import (
     CallbackQueryHandler,
     MessageHandler,
@@ -23,8 +24,8 @@ from modules.states import (
 
 async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Entry point: користувач натиснув “💰 Поповнити” (callback_data="deposit_start").
-    Надсилаємо одне базове повідомлення та зберігаємо його message_id у user_data.
+    Крок 1: натискання “💰 Поповнити”.
+    Надсилаємо базове повідомлення “Введіть суму...” та зберігаємо message_id.
     """
     await update.callback_query.answer()
 
@@ -34,14 +35,13 @@ async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=nav_buttons()
     )
     context.user_data["base_msg_id"] = sent.message_id
-
     return STEP_DEPOSIT_AMOUNT
 
 async def process_deposit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Крок STEP_DEPOSIT_AMOUNT: користувач вводить суму.
-    Перевіряємо, чи це число. Якщо так — зберігаємо й редагуємо повідомлення,
-    показуючи “Оберіть провайдера”. Якщо ні — знову просимо ввести коректну суму.
+    Крок 2: користувач ввів суму.
+    Перевіряємо, чи це число. Якщо ні — редагуємо помилку.
+    Якщо так — зберігаємо та редагуємо повідомлення: “Оберіть провайдера”.
     """
     text = update.message.text.strip()
     try:
@@ -49,32 +49,39 @@ async def process_deposit_amount(update: Update, context: ContextTypes.DEFAULT_T
     except ValueError:
         base_id = context.user_data.get("base_msg_id")
         if base_id:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=update.effective_chat.id,
+                    message_id=base_id,
+                    text="❗️ Невірний формат суми. Ведіть число (наприклад, 100):",
+                    reply_markup=nav_buttons()
+                )
+            except BadRequest as e:
+                if "Message is not modified" not in str(e):
+                    raise
+        return STEP_DEPOSIT_AMOUNT
+
+    # Сума валідна
+    context.user_data["deposit_amount"] = amount
+
+    base_id = context.user_data.get("base_msg_id")
+    if base_id:
+        try:
             await context.bot.edit_message_text(
                 chat_id=update.effective_chat.id,
                 message_id=base_id,
-                text="❗️ Невірний формат суми. Введіть число (наприклад, 100):",
-                reply_markup=nav_buttons()
+                text="🎰 Оберіть провайдера:",
+                reply_markup=provider_buttons()
             )
-        return STEP_DEPOSIT_AMOUNT
-
-    # Зберігаємо суму в контекст
-    context.user_data["deposit_amount"] = amount
-
-    # Редагуємо те ж повідомлення, тепер з клавіатурою вибору провайдера
-    base_id = context.user_data.get("base_msg_id")
-    if base_id:
-        await context.bot.edit_message_text(
-            chat_id=update.effective_chat.id,
-            message_id=base_id,
-            text="🎰 Оберіть провайдера:",
-            reply_markup=provider_buttons()
-        )
+        except BadRequest as e:
+            if "Message is not modified" not in str(e):
+                raise
     return STEP_DEPOSIT_PROVIDER
 
 async def process_deposit_provider(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Крок STEP_DEPOSIT_PROVIDER: користувач обрав провайдера (callback_data = одна з PROVIDERS).
-    Зберігаємо його та редагуємо повідомлення, питаючи метод оплати.
+    Крок 3: користувач обрав провайдера.
+    Зберігаємо та редагуємо повідомлення: “Оберіть метод оплати”.
     """
     await update.callback_query.answer()
     provider = update.callback_query.data
@@ -82,18 +89,22 @@ async def process_deposit_provider(update: Update, context: ContextTypes.DEFAULT
 
     base_id = context.user_data.get("base_msg_id")
     if base_id:
-        await context.bot.edit_message_text(
-            chat_id=update.effective_chat.id,
-            message_id=base_id,
-            text="💳 Оберіть метод оплати:",
-            reply_markup=payment_buttons()
-        )
+        try:
+            await context.bot.edit_message_text(
+                chat_id=update.effective_chat.id,
+                message_id=base_id,
+                text="💳 Оберіть метод оплати:",
+                reply_markup=payment_buttons()
+            )
+        except BadRequest as e:
+            if "Message is not modified" not in str(e):
+                raise
     return STEP_DEPOSIT_PAYMENT
 
 async def process_deposit_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Крок STEP_DEPOSIT_PAYMENT: користувач обрав метод оплати (callback_data = одна з PAYMENTS).
-    Зберігаємо його та редагуємо повідомлення, запитуючи файл (фото/документ/відео).
+    Крок 4: користувач обрав метод оплати.
+    Зберігаємо та редагуємо повідомлення: “Надішліть підтвердження”.
     """
     await update.callback_query.answer()
     payment_method = update.callback_query.data
@@ -101,18 +112,22 @@ async def process_deposit_payment(update: Update, context: ContextTypes.DEFAULT_
 
     base_id = context.user_data.get("base_msg_id")
     if base_id:
-        await context.bot.edit_message_text(
-            chat_id=update.effective_chat.id,
-            message_id=base_id,
-            text="📎 Надішліть підтвердження (фото, документ або відео):",
-            reply_markup=nav_buttons()
-        )
+        try:
+            await context.bot.edit_message_text(
+                chat_id=update.effective_chat.id,
+                message_id=base_id,
+                text="📎 Надішліть підтвердження (фото, документ або відео):",
+                reply_markup=nav_buttons()
+            )
+        except BadRequest as e:
+            if "Message is not modified" not in str(e):
+                raise
     return STEP_DEPOSIT_FILE
 
 async def process_deposit_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Крок STEP_DEPOSIT_FILE: користувач надіслав фото/документ/відео.
-    Зберігаємо file_type і file_id, редагуємо повідомлення, показуючи “Підтвердити”.
+    Крок 5: користувач надіслав фото/документ/відео.
+    Зберігаємо file_type і file_id, та редагуємо повідомлення: “Підтвердіть”.
     """
     if update.message.photo:
         ftype = "photo"
@@ -126,36 +141,42 @@ async def process_deposit_file(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         base_id = context.user_data.get("base_msg_id")
         if base_id:
-            await context.bot.edit_message_text(
-                chat_id=update.effective_chat.id,
-                message_id=base_id,
-                text="❗️ Будь ласка, надішліть фото, документ або відео:",
-                reply_markup=nav_buttons()
-            )
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=update.effective_chat.id,
+                    message_id=base_id,
+                    text="❗️ Будь ласка, надішліть фото, документ або відео:",
+                    reply_markup=nav_buttons()
+                )
+            except BadRequest as e:
+                if "Message is not modified" not in str(e):
+                    raise
         return STEP_DEPOSIT_FILE
 
-    # Зберігаємо тип та ідентифікатор файлу
     context.user_data["deposit_file_type"] = ftype
     context.user_data["deposit_file_id"]   = file_id
 
-    # Створюємо клавіатуру з кнопкою “Підтвердити”
     kb = InlineKeyboardMarkup([[
         InlineKeyboardButton("✅ Підтвердити", callback_data=CB.DEPOSIT_CONFIRM.value)
     ]])
     base_id = context.user_data.get("base_msg_id")
     if base_id:
-        await context.bot.edit_message_text(
-            chat_id=update.effective_chat.id,
-            message_id=base_id,
-            text="✅ Все готово. Натисніть «Підтвердити», щоб завершити поповнення.",
-            reply_markup=kb
-        )
+        try:
+            await context.bot.edit_message_text(
+                chat_id=update.effective_chat.id,
+                message_id=base_id,
+                text="✅ Все готово. Натисніть «Підтвердити», щоб завершити поповнення.",
+                reply_markup=kb
+            )
+        except BadRequest as e:
+            if "Message is not modified" not in str(e):
+                raise
     return STEP_DEPOSIT_CONFIRM
 
 async def confirm_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Крок STEP_DEPOSIT_CONFIRM: користувач натиснув “✅ Підтвердити” (callback_data="deposit_confirm").
-    Зберігаємо фінальну інформацію у таблицю deposits та повідомляємо клієнта.
+    Крок 6: користувач натиснув “✅ Підтвердити”.
+    Зберігаємо в БД та редагуємо повідомлення: “Ваше поповнення збережено…”.
     """
     await update.callback_query.answer()
     user = update.effective_user
@@ -166,7 +187,6 @@ async def confirm_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ftype    = context.user_data.get("deposit_file_type")
     file_id  = context.user_data.get("deposit_file_id")
 
-    # Зберігаємо в SQLite
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute(
             """
@@ -177,21 +197,24 @@ async def confirm_deposit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         conn.commit()
 
-    # Редагуємо те ж повідомлення, показуючи фінальний текст
     base_id = context.user_data.get("base_msg_id")
+    final_text = "💸 Ваше поповнення збережено! Очікуйте підтвердження від адміністратора."
     if base_id:
-        await context.bot.edit_message_text(
-            chat_id=update.effective_chat.id,
-            message_id=base_id,
-            text="💸 Ваше поповнення збережено! Очікуйте підтвердження від адміністратора.",
-            reply_markup=nav_buttons()
-        )
+        try:
+            await context.bot.edit_message_text(
+                chat_id=update.effective_chat.id,
+                message_id=base_id,
+                text=final_text,
+                reply_markup=nav_buttons()
+            )
+        except BadRequest as e:
+            if "Message is not modified" not in str(e):
+                raise
 
-    # Очищаємо ключ, щоб при наступному запуску “Поповнення” з’явилося нове повідомлення
+    # Завершуємо сценарій, очищаємо ключ
     context.user_data.pop("base_msg_id", None)
     return ConversationHandler.END
 
-# ─── ConversationHandler для “Поповнення” ───────────────────────────────────────
 deposit_conv = ConversationHandler(
     entry_points=[
         CallbackQueryHandler(deposit_start, pattern=f"^{CB.DEPOSIT_START.value}$")
@@ -211,7 +234,4 @@ deposit_conv = ConversationHandler(
 )
 
 def register_deposit_handlers(app: Application) -> None:
-    """
-    Регіструємо ConversationHandler “депозит” у групі 0.
-    """
     app.add_handler(deposit_conv, group=0)
