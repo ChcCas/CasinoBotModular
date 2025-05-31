@@ -1,23 +1,35 @@
-# modules/handlers/navigation.py
-
+import re
 import sqlite3
-from telegram import Update
-from telegram.error import BadRequest
-from telegram.ext import CallbackQueryHandler, ContextTypes, Application
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    CallbackQueryHandler,
+    ContextTypes,
+    Application,
+)
 from modules.config import DB_NAME
 from modules.callbacks import CB
-from modules.keyboards import nav_buttons
+from modules.keyboards import (
+    PROVIDERS,
+    PAYMENTS,
+    nav_buttons,
+    provider_buttons,
+    payment_buttons,
+    admin_panel_kb,
+)
 from modules.states import (
     STEP_MENU,
     STEP_DEPOSIT_AMOUNT,
     STEP_WITHDRAW_AMOUNT,
     STEP_REG_NAME,
     STEP_ADMIN_SEARCH,
-    STEP_ADMIN_BROADCAST
+    STEP_ADMIN_BROADCAST,
 )
 from .start import start_command
 from .admin import show_admin_panel
+from .profile import start_profile
 
+# Якщо потрібно вести таблицю threads (зараз проєкт обходиться без неї,
+# але залишаю заготівку на майбутнє):
 def _init_threads():
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("""
@@ -29,76 +41,67 @@ def _init_threads():
         conn.commit()
 
 async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Основна логіка роутингу для всіх callback_query, що не потрапили у ConversationHandler-и.
+    """
     query = update.callback_query
     data = query.data
     await query.answer()
 
-    # Адмін-панель
+    # ─── Адмін-панель ───
     if data == "admin_panel":
         return await show_admin_panel(update, context)
 
-    # Якщо callback_data запускає ConversationHandler (група 0) — ігноруємо
-    if data in (
-        CB.CLIENT_PROFILE.value,
-        CB.DEPOSIT_START.value,
-        CB.WITHDRAW_START.value,
-        CB.ADMIN_SEARCH.value,
-        CB.ADMIN_BROADCAST.value
-    ):
-        return
-
-    # Назад / Головне меню
+    # ─── Повернення «додому» або «назад» ───
     if data in (CB.HOME.value, CB.BACK.value):
         return await start_command(update, context)
 
-    # Допомога
+    # ─── «Мій профіль» (якщо користувач клікнув тут, але не в ConversationHandler) ───
+    if data == CB.CLIENT_PROFILE.value:
+        return await start_profile(update, context)
+
+    # ─── Поповнення ───
+    if data == CB.DEPOSIT_START.value:
+        await query.message.reply_text("💸 Введіть суму для поповнення:", reply_markup=nav_buttons())
+        return STEP_DEPOSIT_AMOUNT
+
+    # ─── Виведення коштів ───
+    if data == CB.WITHDRAW_START.value:
+        await query.message.reply_text("💳 Введіть суму для виведення:", reply_markup=nav_buttons())
+        return STEP_WITHDRAW_AMOUNT
+
+    # ─── Реєстрація ───
+    if data == "register":
+        await query.message.reply_text("📝 Введіть ваше ім’я:", reply_markup=nav_buttons())
+        return STEP_REG_NAME
+
+    # ─── Допомога ───
     if data == CB.HELP.value:
-        text = "ℹ️ Допомога:\n/start — перезапустити бота\n📲 Зверніться до підтримки, якщо є питання."
-        base_id = context.user_data.get("base_msg_id")
-        if base_id:
-            try:
-                await context.bot.edit_message_text(
-                    chat_id=update.effective_chat.id,
-                    message_id=base_id,
-                    text=text,
-                    reply_markup=nav_buttons()
-                )
-            except BadRequest as e:
-                msg = str(e)
-                if "Message to edit not found" in msg or "Message is not modified" in msg:
-                    sent = await update.callback_query.message.reply_text(
-                        text,
-                        reply_markup=nav_buttons()
-                    )
-                    context.user_data["base_msg_id"] = sent.message_id
-                else:
-                    raise
-        else:
-            sent = await update.callback_query.message.reply_text(
-                text,
-                reply_markup=nav_buttons()
-            )
-            context.user_data["base_msg_id"] = sent.message_id
+        await query.message.reply_text("ℹ️ Допомога:\n/start — перезапуск\n📲 Питання — через чат", reply_markup=nav_buttons())
         return STEP_MENU
 
-    # Якщо нічого не збіглося — повертаємося до /start
+    # ─── Адмін: пошук користувача ───
+    if data == CB.ADMIN_SEARCH.value:
+        await query.message.reply_text("🔍 Введіть ID або картку для пошуку:", reply_markup=nav_buttons())
+        return STEP_ADMIN_BROADCAST
+
+    # ─── Адмін: розсилка ───
+    if data == CB.ADMIN_BROADCAST.value:
+        await query.message.reply_text("📢 Введіть текст для розсилки:", reply_markup=nav_buttons())
+        return STEP_MENU
+
+    # ─── Якщо нічого не збіглося — повернутися в меню
     return await start_command(update, context)
 
 def register_navigation_handlers(app: Application):
+    """
+    Реєструє загальний CallbackQueryHandler для всіх невпійманих кнопок (група=1).
+    """
     _init_threads()
 
-    # CallbackQueryHandler для “home”
-    app.add_handler(
-        CallbackQueryHandler(start_command, pattern="^home$"),
-        group=1
-    )
-    # CallbackQueryHandler для “back”
-    app.add_handler(
-        CallbackQueryHandler(start_command, pattern="^back$"),
-        group=1
-    )
-    # Основний menu_handler
-    app.add_handler(
-        CallbackQueryHandler(menu_handler, pattern=".*"),
-        group=1
-    )
+    # Реєструємо «Головне меню» / «Назад»
+    app.add_handler(CallbackQueryHandler(start_command, pattern="^home$"), group=1)
+    app.add_handler(CallbackQueryHandler(start_command, pattern="^back$"), group=1)
+
+    # Основний роутер для всіх інших callback_data → menu_handler
+    app.add_handler(CallbackQueryHandler(menu_handler, pattern=".*"), group=1)
