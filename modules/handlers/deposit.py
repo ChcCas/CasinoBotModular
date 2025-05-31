@@ -9,17 +9,12 @@ from telegram.ext import (
     ContextTypes,
 )
 from modules.callbacks import CB
-from modules.db import authorize_card  # якщо потрібна логіка авторизації
 from modules.keyboards import nav_buttons, client_menu
 from modules.states import (
     STEP_DEPOSIT_AMOUNT,
     STEP_DEPOSIT_FILE,
     STEP_DEPOSIT_CONFIRM
 )
-
-# Уявна функція, яка повідомить адміну про депозит
-async def notify_admin_deposit(user_id, amount, file_id):
-    pass
 
 async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -51,16 +46,11 @@ async def deposit_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return STEP_DEPOSIT_FILE
 
 async def deposit_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Отримуємо файл/фото/відео
-    file_type = None
-    if update.message.document:
-        file_type = "document"
-        file_id = update.message.document.file_id
-    elif update.message.photo:
-        file_type = "photo"
+    if update.message.photo:
         file_id = update.message.photo[-1].file_id
+    elif update.message.document:
+        file_id = update.message.document.file_id
     elif update.message.video:
-        file_type = "video"
         file_id = update.message.video.file_id
     else:
         await update.message.reply_text(
@@ -70,7 +60,6 @@ async def deposit_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return STEP_DEPOSIT_FILE
 
     context.user_data['deposit_file_id'] = file_id
-    context.user_data['deposit_file_type'] = file_type
     base_id = context.user_data['base_msg']
 
     kb = InlineKeyboardMarkup([
@@ -87,27 +76,27 @@ async def deposit_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def deposit_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
-    amt = context.user_data['deposit_amount']
-    fid = context.user_data['deposit_file_id']
-    # Можна повідомити адміну або обробити депозит
-    await notify_admin_deposit(update.effective_user.id, amt, fid)
-
+    amount = context.user_data['deposit_amount']
     await update.callback_query.message.edit_text(
-        f"🎉 Депозит на суму {amt} отримано. Очікуйте підтвердження.",
+        f"🎉 Депозит на суму {amount} отримано. Очікуйте підтвердження.",
         reply_markup=client_menu(is_authorized=True)
     )
     context.user_data.clear()
     return ConversationHandler.END
 
 deposit_conv = ConversationHandler(
-    entry_points=[CallbackQueryHandler(deposit_start, pattern=f"^{CB.DEPOSIT_START.value}$")],
+    entry_points=[
+        CallbackQueryHandler(deposit_start, pattern=f"^{CB.DEPOSIT_START.value}$")
+    ],
     states={
-        STEP_DEPOSIT_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, deposit_amount)],
-        STEP_DEPOSIT_FILE:   [MessageHandler(filters.Document.ALL | filters.PHOTO | filters.VIDEO, deposit_file)],
-        STEP_DEPOSIT_CONFIRM:[CallbackQueryHandler(deposit_confirm, pattern=f"^{CB.DEPOSIT_CONFIRM.value}$")],
+        STEP_DEPOSIT_AMOUNT:  [MessageHandler(filters.TEXT & ~filters.COMMAND, deposit_amount)],
+        STEP_DEPOSIT_FILE:    [MessageHandler(filters.PHOTO | filters.Document.ALL | filters.VIDEO, deposit_file)],
+        STEP_DEPOSIT_CONFIRM: [CallbackQueryHandler(deposit_confirm, pattern=f"^{CB.DEPOSIT_CONFIRM.value}$")],
     },
-    fallbacks=[CallbackQueryHandler(deposit_start, pattern=f"^{CB.BACK.value}$")],
-    per_chat=True,  # <-- Замість per_message=True
+    fallbacks=[
+        CallbackQueryHandler(deposit_start, pattern=f"^{CB.BACK.value}$")
+    ],
+    per_chat=True,
 )
 
 def register_deposit_handlers(app: "Application") -> None:
